@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace RabitaskWebAPI.Controllers
+namespace RabbitaskWebAPI.Controllers
 {
     [ApiController]
     [Route("[controller]")]
