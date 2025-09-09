@@ -1,4 +1,4 @@
-namespace RabitaskWebAPI
+namespace RabbitaskWebAPI
 {
     public class WeatherForecast
     {
