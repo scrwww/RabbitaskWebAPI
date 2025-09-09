@@ -7,17 +7,23 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add DbContext
+// DbContext
 builder.Services.AddDbContext<RabbitaskContext>(options =>
-    options.UseMySQL(builder.Configuration.GetConnectionString("RabbitaskDb")
-));
+    options.UseMySQL(builder.Configuration.GetConnectionString("RabbitaskDb")!)
+);
 
-
-
-// Read JWT config from secrets.json
+// ler config JWT em secrets.json
 var jwtConfig = builder.Configuration.GetSection("JwtConfig");
 
-// Add JWT authentication
+// validar config JWT em secrets.json
+if (string.IsNullOrEmpty(jwtConfig["Key"]) ||
+    string.IsNullOrEmpty(jwtConfig["Issuer"]) ||
+    string.IsNullOrEmpty(jwtConfig["Audience"]))
+{
+    throw new InvalidOperationException("JWT configuration is missing or incomplete");
+}
+
+// adicionar JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -35,7 +41,29 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtConfig["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtConfig["Key"]!)
-        )
+        ),
+        ClockSkew = TimeSpan.FromMinutes(5),
+        RequireExpirationTime = true,
+        RequireSignedTokens = true
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine("Token validated successfully");
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            Console.WriteLine($"Authentication challenge: {context.Error} - {context.ErrorDescription}");
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -43,7 +71,18 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 
-// Add Swagger + JWT support
+// adicionar CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// adicionar Swagger com JWT
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "RabbitaskWebAPI", Version = "v1" });
@@ -54,7 +93,8 @@ builder.Services.AddSwaggerGen(c =>
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
-        Scheme = "Bearer"
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -75,11 +115,19 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Use CORS
+app.UseCors();
+
+// Use authentication and authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseSwagger();
-app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "RabbitaskWebAPI v1"));
+// Configure Swagger
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "RabbitaskWebAPI v1"));
+}
 
 app.MapControllers();
 
