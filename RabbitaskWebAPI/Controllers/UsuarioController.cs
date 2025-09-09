@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Org.BouncyCastle.Crypto.Generators;
 using RabbitaskWebAPI.Data;
 using RabbitaskWebAPI.Models;
 using System.IdentityModel.Tokens.Jwt;
@@ -26,13 +25,14 @@ namespace RabbitaskWebAPI.Controllers
             _configuration = configuration;
         }
 
-        [HttpGet("test")]
+        [HttpGet("Teste")]
         public IActionResult Test()
         {
             return Ok(new { Message = "API funcionando", Timestamp = DateTime.Now });
         }
 
-        [HttpPost("register")]
+
+        [HttpPost("Cadastrar")]
         public IActionResult Register([FromBody] RegisterRequest request)
         {
             if (_context.Usuarios.Any(u => u.NmEmail == request.Email))
@@ -40,19 +40,24 @@ namespace RabbitaskWebAPI.Controllers
             if (_context.Usuarios.Any(u => u.CdTelefone == request.Telefone))
                 return BadRequest("Telefone já está em uso");
 
-            if(request.Password.Length < 8)
+            if(request.Senha.Length < 8)
                 return BadRequest("A senha deve ter pelo menos 8 caracteres.");
 
-            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Senha);
 
             var newUser = new Usuario
             {
-                NmUsuario = request.Name,
+                NmUsuario = request.Nome,
                 NmEmail = request.Email,
                 NmSenha = hashedPassword,
                 CdTipoUsuario = request.TipoUsuario,
                 CdTelefone = request.Telefone
             };
+
+            if(request.TipoUsuario != 1 && request.TipoUsuario != 2)
+            {
+                return BadRequest("Tipo de usuário inválido");
+            }
 
             _context.Usuarios.Add(newUser);
             _context.SaveChanges();
@@ -62,67 +67,20 @@ namespace RabbitaskWebAPI.Controllers
 
         public class RegisterRequest
         {
-            public string Name { get; set; }
+            public string Nome { get; set; }
             public string Email { get; set; }
-            public string Password { get; set; }
+            public string Senha { get; set; }
             public int TipoUsuario { get; set; }
             public string? Telefone { get; set; }
         }
 
-        [HttpGet("me")]
-        [Authorize]
-        public IActionResult GetCurrentUser()
-        {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ??
-                                 User.FindFirst(JwtRegisteredClaimNames.Sub) ??
-                                 User.FindFirst("sub");
-
-                if (userIdClaim == null)
-                {
-                    return Unauthorized("Claim do ID do usuário não encontrado no token");
-                }
-
-                if (!int.TryParse(userIdClaim.Value, out int userId))
-                {
-                    return Unauthorized("Formato do ID incorreto");
-                }
-
-                var user = _context.Usuarios
-                    .Include(u => u.CdTipoUsuarioNavigation)
-                    .Where(u => u.CdUsuario == userId)
-                    .Select(u => new
-                    {
-                        u.CdUsuario,
-                        u.NmUsuario,
-                        u.NmEmail,
-                        TipoUsuario = u.CdTipoUsuarioNavigation != null ? new
-                        {
-                            u.CdTipoUsuarioNavigation.CdTipoUsuario,
-                            u.CdTipoUsuarioNavigation.NmTipoUsuario
-                        } : null
-                    })
-                    .FirstOrDefault();
-
-                if (user == null)
-                    return NotFound("Usuário não encontrado");
-
-                return Ok(user);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
-        }
-
-        [HttpPost("login")]
+        [HttpPost("Login")]
         public IActionResult Login([FromBody] LoginRequest request)
         {
             try
             {
                 var user = _context.Usuarios.FirstOrDefault(u => u.NmEmail == request.Email);
-                if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.NmSenha))
+                if (user == null || !BCrypt.Net.BCrypt.Verify(request.Senha, user.NmSenha))
                 {
                     return Unauthorized("Login ou senha inválido(s)");
                 }
@@ -167,13 +125,60 @@ namespace RabbitaskWebAPI.Controllers
             }
         }
 
+        [HttpGet("Eu")]
+        [Authorize]
+        public IActionResult GetCurrentUser()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ??
+                                 User.FindFirst(JwtRegisteredClaimNames.Sub) ??
+                                 User.FindFirst("sub");
+
+                if (userIdClaim == null)
+                {
+                    return Unauthorized("Claim do ID do usuário não encontrado no token");
+                }
+
+                if (!int.TryParse(userIdClaim.Value, out int cdUsuario))
+                {
+                    return Unauthorized("Formato do ID incorreto");
+                }
+
+                var user = _context.Usuarios
+                    .Include(u => u.CdTipoUsuarioNavigation)
+                    .Where(u => u.CdUsuario == cdUsuario)
+                    .Select(u => new
+                    {
+                        u.CdUsuario,
+                        u.NmUsuario,
+                        u.NmEmail,
+                        TipoUsuario = u.CdTipoUsuarioNavigation != null ? new
+                        {
+                            u.CdTipoUsuarioNavigation.CdTipoUsuario,
+                            u.CdTipoUsuarioNavigation.NmTipoUsuario
+                        } : null
+                    })
+                    .FirstOrDefault();
+
+                if (user == null)
+                    return NotFound("Usuário não encontrado");
+
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
         public class LoginRequest
         {
             public string Email { get; set; }
-            public string Password { get; set; }
+            public string Senha { get; set; }
         }
 
-        [HttpGet("debug-claims")]
+        [HttpGet("debug-autenticacao")]
         [Authorize]
         public IActionResult DebugClaims()
         {
