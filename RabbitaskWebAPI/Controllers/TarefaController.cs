@@ -1,175 +1,368 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RabbitaskWebAPI.Data;
 using RabbitaskWebAPI.Models;
+using RabbitaskWebAPI.DTOs.Common;
+using RabbitaskWebAPI.DTOs.Tarefa;
+using RabbitaskWebAPI.RequestModels.Tarefa;
 using System.ComponentModel.DataAnnotations;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using static RabbitaskWebAPI.Controllers.UsuarioController;
+using RabbitaskWebAPI.DTOs.Usuario;
+using RabbitaskWebAPI.DTOs.Tag;
+using RabbitaskWebAPI.DTOs.Prioridade;
 
 namespace RabbitaskWebAPI.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
-
-    public class TarefaController : ControllerBase
+    [Authorize]
+    public class TarefaController : BaseController
     {
         private readonly RabbitaskContext _context;
-        private readonly IConfiguration _configuration;
 
-        public TarefaController(RabbitaskContext context, IConfiguration configuration)
+        public TarefaController(RabbitaskContext context, ILogger<TarefaController> logger)
+            : base(logger)
         {
             _context = context;
-            _configuration = configuration;
         }
 
-        [HttpGet("Tarefas")]
-        [Authorize]
-        public IActionResult GetTarefasUsuario()
+        /// <summary>
+        /// Obter todas as tarefas do usuário autenticado
+        /// Note como o código ficou mais limpo e focado na lógica de negócio
+        /// </summary>
+        [HttpGet("minhas-tarefas")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<TarefaResumoDto>>>> GetMinhasTarefas(
+            [FromQuery] int? prioridadeId = null,
+            [FromQuery] bool? concluidas = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ??
-                                 User.FindFirst(JwtRegisteredClaimNames.Sub) ??
-                                 User.FindFirst("sub");
+                var cdUsuario = ObterIdUsuarioAutenticado();
 
-                if (userIdClaim == null)
-                {
-                    return Unauthorized("Claim do ID do usuário não encontrado no token");
-                }
-
-                if (!int.TryParse(userIdClaim.Value, out int cdUsuario))
-                {
-                    return Unauthorized("Formato do ID incorreto");
-                }
-
-                var tarefas = _context.Tarefas
+                // Query base
+                var query = _context.Tarefas
                     .Where(t => t.CdUsuario == cdUsuario)
-                    .Select(t => new
+                    .Include(t => t.CdTags)
+                    .Include(t => t.CdPrioridadeNavigation)
+                    .AsQueryable();
+
+                // Aplicar filtros opcionais
+                if (prioridadeId.HasValue)
+                {
+                    query = query.Where(t => t.CdPrioridade == prioridadeId.Value);
+                }
+
+                if (concluidas.HasValue)
+                {
+                    if (concluidas.Value)
+                        query = query.Where(t => t.DtConclusao != null);
+                    else
+                        query = query.Where(t => t.DtConclusao == null);
+                }
+
+                // Paginação
+                var totalItems = await query.CountAsync();
+                var tarefas = await query
+                    .OrderByDescending(t => t.DtCriacao)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(t => new TarefaResumoDto
                     {
-                        t.NmTarefa,
-                        t.DtPrazo,
-                        t.DtConclusao,
-                        t.CdTags
-                    });
+                        Cd = t.CdTarefa,
+                        Nome = t.NmTarefa,
+                        Descricao = t.DsTarefa,
+                        DataPrazo = t.DtPrazo,
+                        DataConclusao = t.DtConclusao,
+                        DataCriacao = t.DtCriacao,
+                        Prioridade = t.CdPrioridadeNavigation != null ? t.CdPrioridadeNavigation.NmPrioridade : null,
+                        Tags = t.CdTags.Select(tag => new TagResumoDto
+                        {
+                            Cd = tag.CdTag,
+                            Nome = tag.NmTag
+                        }).ToList(),
 
-                if (tarefas == null)
-                    return NotFound("tarefas não encontradas");
+                    })
+                    .ToListAsync();
 
-                return Ok(tarefas);
+                var lista = tarefas as IEnumerable<TarefaResumoDto>;
+                return SuccessResponse<IEnumerable<TarefaResumoDto>>(lista,
+                    $"Encontradas {tarefas.Count} tarefas");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
+                return HandleException<IEnumerable<TarefaResumoDto>>(ex, nameof(GetMinhasTarefas));
             }
         }
 
-        [HttpPost("Criar")]
-        [Authorize]
-        public IActionResult Criar([FromBody] CriarRequest request)
+        /// <summary>
+        /// Criar uma nova tarefa
+        /// Demonstra como a lógica de negócio fica mais clara sem código repetitivo
+        /// </summary>
+        [HttpPost]
+        public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa([FromBody] CriarTarefaRequest request)
         {
             try
             {
-                if (request == null || string.IsNullOrEmpty(request.Nome))
+                if (!ModelState.IsValid)
                 {
-                    return BadRequest("Nome da tarefa é obrigatório");
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToArray();
+
+                    return ErrorResponse<TarefaCriadaDto>(400, "Dados inválidos fornecidos", errors);
                 }
 
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ??
-                                 User.FindFirst(JwtRegisteredClaimNames.Sub) ??
-                                 User.FindFirst("sub");
+                var cdUsuario = ObterIdUsuarioAutenticado();
 
-                if (userIdClaim == null)
+                // Validar dependências antes de iniciar transação
+                await ValidarDependenciasTarefa(request);
+
+                using var transaction = await _context.Database.BeginTransactionAsync();
+
+                try
                 {
-                    return Unauthorized("Claim do ID do usuário não encontrado no token");
-                }
-
-                if (!int.TryParse(userIdClaim.Value, out int cdUsuario))
-                {
-                    return Unauthorized("Formato do ID incorreto");
-                }
-
-                DateTime? dtPrazo = null;
-                DateTime? dtCriacao = DateTime.Now;
-                DateTime? dtConclusao = null;
-
-                if (!string.IsNullOrEmpty(request.Prazo))
-                {
-                    if (DateTime.TryParse(request.Prazo, out DateTime parsedPrazo))
+                    var novaTarefa = new Tarefa
                     {
-                        dtPrazo = parsedPrazo;
-                    }
-                    else
+                        NmTarefa = request.Nome.Trim(),
+                        DsTarefa = !string.IsNullOrWhiteSpace(request.Descricao) ? request.Descricao.Trim() : null,
+                        CdPrioridade = request.CdPrioridade,
+                        DtPrazo = request.DataPrazo,
+                        CdUsuario = cdUsuario,
+                        CdUsuarioProprietario = request.CdUsuarioProprietario ?? cdUsuario,
+                        DtCriacao = DateTime.Now
+                    };
+
+                    _context.Tarefas.Add(novaTarefa);
+                    await _context.SaveChangesAsync();
+
+                    // Associar tags se fornecidas
+                    if (request.TagIds?.Any() == true)
                     {
-                        return BadRequest("Formato de data inválido para Prazo");
+                        await AssociarTagsATarefa(novaTarefa.CdTarefa, request.TagIds);
                     }
-                }
 
-                if (!string.IsNullOrEmpty(request.DtCriacao))
-                {
-                    if (DateTime.TryParse(request.DtCriacao, out DateTime parsedCriacao))
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation("Tarefa {TarefaId} criada pelo usuário {UsuarioId}",
+                        novaTarefa.CdTarefa, cdUsuario);
+
+                    var resultado = new TarefaCriadaDto
                     {
-                        dtCriacao = parsedCriacao;
-                    }
+                        Cd = novaTarefa.CdTarefa,
+                        Nome = novaTarefa.NmTarefa,
+                        DataCriacao = novaTarefa.DtCriacao
+                    };
+
+                    return CreatedAtAction(nameof(GetTarefaPorId),
+                        new { id = novaTarefa.CdTarefa },
+                        ApiResponse<TarefaCriadaDto>.CreateSuccess(resultado, "Tarefa criada com sucesso"));
                 }
-
-                if (!string.IsNullOrEmpty(request.DtConclusao))
+                catch
                 {
-                    if (DateTime.TryParse(request.DtConclusao, out DateTime parsedConclusao))
-                    {
-                        dtConclusao = parsedConclusao;
-                    }
+                    await transaction.RollbackAsync();
+                    throw;
                 }
-
-                var newTarefa = new Tarefa
-                {
-                    NmTarefa = request.Nome,
-                    DsTarefa = request.Descricao,
-                    CdPrioridade = request.Prioridade > 0 ? request.Prioridade : null,
-                    DtPrazo = dtPrazo,
-                    CdUsuario = cdUsuario,
-                    CdUsuarioProprietario = request.CdUsuarioProprietario > 0 ? request.CdUsuarioProprietario : cdUsuario,
-                    DtCriacao = dtCriacao,
-                    DtConclusao = dtConclusao
-                };
-
-                _context.Tarefas.Add(newTarefa);
-                _context.SaveChanges();
-
-                return Ok(new
-                {
-                    Message = "Tarefa criada com sucesso",
-                    TarefaId = newTarefa.CdTarefa,
-                    Nome = newTarefa.NmTarefa,
-                    DataCriacao = newTarefa.DtCriacao
-                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro interno do servidor: {ex.Message}");
+                return HandleException<TarefaCriadaDto>(ex, nameof(CriarTarefa));
             }
         }
-    }
 
-    public class CriarRequest
-    {
-        [Required(ErrorMessage = "Nome da tarefa é obrigatório")]
-        [StringLength(250, ErrorMessage = "Nome deve ter no máximo 250 caracteres")]
-        public string Nome { get; set; }
+        /// <summary>
+        /// Buscar tarefa por ID
+        /// </summary>
+        [HttpGet("{cd:int}")]
+        public async Task<ActionResult<ApiResponse<TarefaDetalheDto>>> GetTarefaPorId(int cd)
+        {
+            try
+            {
+                var cdUsuario = ObterIdUsuarioAutenticado();
 
-        [Range(1, int.MaxValue, ErrorMessage = "Prioridade deve ser um valor positivo")]
-        public int? Prioridade { get; set; }
+                var tarefa = await _context.Tarefas
+                    .Include(t => t.CdTags)
+                    .Include(t => t.CdPrioridadeNavigation)
+                    .Include(t => t.CdUsuarioProprietarioNavigation)
+                    .Where(t => t.CdTarefa == cd && t.CdUsuario == cdUsuario)
+                    .Select(t => new TarefaDetalheDto
+                    {
+                        Cd = t.CdTarefa,
+                        Nome = t.NmTarefa,
+                        Descricao = t.DsTarefa,
+                        DataPrazo = t.DtPrazo,
+                        DataCriacao = t.DtCriacao,
+                        DataConclusao = t.DtConclusao,
+                        Prioridade = t.CdPrioridadeNavigation != null ?
+                            new PrioridadeDto
+                            {
+                                Cd = t.CdPrioridadeNavigation.CdPrioridade,
+                                Nome = t.CdPrioridadeNavigation.NmPrioridade
+                            } : null,
+                        UsuarioProprietario = t.CdUsuarioProprietarioNavigation != null ?
+                            new UsuarioResumoDto
+                            {
+                                Cd = t.CdUsuarioProprietarioNavigation.CdUsuario,
+                                Nome = t.CdUsuarioProprietarioNavigation.NmUsuario
+                            } : null,
+                        Tags = t.CdTags.Select(tag => new TagResumoDto
+                        {
+                            Cd = tag.CdTag,
+                            Nome = tag.NmTag
+                        }).ToList(),
+                        //Conclusao é feita automaticamente com base na data de conclusão
+                    })
+                    .FirstOrDefaultAsync();
 
-        [StringLength(2000, ErrorMessage = "Descrição deve ter no máximo 2000 caracteres")]
-        public string? Descricao { get; set; }
+                if (tarefa == null)
+                {
+                    return ErrorResponse<TarefaDetalheDto>(404,
+                        "Tarefa não encontrada",
+                        $"Não foi possível encontrar uma tarefa com ID {cd}");
+                }
 
-        public string? Prazo { get; set; } //"yyyy-MM-dd HH:mm:ss" or "yyyy-MM-dd"
+                return SuccessResponse(tarefa, "Tarefa encontrada com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<TarefaDetalheDto>(ex, nameof(GetTarefaPorId));
+            }
+        }
 
-        public int? CdUsuarioProprietario { get; set; }
+        /// <summary>
+        /// Marcar tarefa como concluída
+        /// </summary>
+        [HttpPatch("{cd:int}/concluir")]
+        public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int cd)
+        {
+            try
+            {
+                var cdUsuario = ObterIdUsuarioAutenticado();
 
-        public string? DtCriacao { get; set; }
-        public string? DtConclusao { get; set; }
+                var tarefa = await _context.Tarefas
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cd && t.CdUsuario == cdUsuario);
+
+                if (tarefa == null)
+                {
+                    return ErrorResponse<object>(404, "Tarefa não encontrada");
+                }
+
+                if (tarefa.DtConclusao.HasValue)
+                {
+                    return ErrorResponse<object>(409, "Tarefa já está concluída");
+                }
+
+                tarefa.DtConclusao = DateTime.Now;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Tarefa {TarefaId} marcada como concluída pelo usuário {UsuarioId}",
+                    cd, cdUsuario);
+
+                return SuccessResponse("Tarefa marcada como concluída");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<object>(ex, nameof(ConcluirTarefa));
+            }
+        }
+
+        /// <summary>
+        /// Reabrir tarefa concluída
+        /// </summary>
+        [HttpPatch("{cd:int}/reabrir")]
+        public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int cd)
+        {
+            try
+            {
+                var cdUsuario = ObterIdUsuarioAutenticado();
+
+                var tarefa = await _context.Tarefas
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cd && t.CdUsuario == cdUsuario);
+
+                if (tarefa == null)
+                {
+                    return ErrorResponse<object>(404, "Tarefa não encontrada");
+                }
+
+                if (!tarefa.DtConclusao.HasValue)
+                {
+                    return ErrorResponse<object>(409, "Tarefa já está em aberto");
+                }
+
+                tarefa.DtConclusao = null;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Tarefa {TarefaId} reaberta pelo usuário {UsuarioId}",
+                    cd, cdUsuario);
+
+                return SuccessResponse("Tarefa reaberta com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<object>(ex, nameof(ReabrirTarefa));
+            }
+        }
+
+        #region Métodos Privados de Apoio
+
+        /// <summary>
+        /// Valida se as dependências da tarefa existem
+        /// </summary>
+        private async Task ValidarDependenciasTarefa(CriarTarefaRequest request)
+        {
+            if (request.CdPrioridade.HasValue)
+            {
+                var prioridadeExiste = await _context.Prioridades
+                    .AnyAsync(p => p.CdPrioridade == request.CdPrioridade.Value);
+
+                if (!prioridadeExiste)
+                {
+                    throw new ArgumentException("A prioridade selecionada não é válida");
+                }
+            }
+
+            if (request.CdUsuarioProprietario.HasValue)
+            {
+                var usuarioExiste = await _context.Usuarios
+                    .AnyAsync(u => u.CdUsuario == request.CdUsuarioProprietario.Value);
+
+                if (!usuarioExiste)
+                {
+                    throw new ArgumentException("O usuário proprietário selecionado não é válido");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Associa tags existentes a uma tarefa
+        /// </summary>
+        private async Task AssociarTagsATarefa(int tarefaCd, IEnumerable<int> tagCds)
+        {
+            var tags = await _context.Tags
+                .Where(t => tagCds.Contains(t.CdTag))
+                .ToListAsync();
+
+            if (tags.Count != tagCds.Count())
+            {
+                throw new ArgumentException("Uma ou mais tags selecionadas não existem");
+            }
+
+            var tarefa = await _context.Tarefas
+                .Include(t => t.CdTags)
+                .FirstAsync(t => t.CdTarefa == tarefaCd);
+
+            foreach (var tag in tags)
+            {
+                if (!tarefa.CdTags.Contains(tag))
+                {
+                    tarefa.CdTags.Add(tag);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        #endregion
     }
 }

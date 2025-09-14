@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Helpers\" />
+    <Folder Include="RequestModels\Common\" />
   </ItemGroup>
 
 </Project>
