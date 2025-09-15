@@ -17,12 +17,12 @@ namespace RabbitaskWebAPI.RequestModels.Tarefa
         [DataType(DataType.DateTime, ErrorMessage = "Formato de data inválido")]
         public DateTime? DataPrazo { get; set; }
 
-        [Range(1, int.MaxValue, ErrorMessage = "ID do usuário proprietário deve ser um valor positivo")]
+        [Range(1, int.MaxValue, ErrorMessage = "Cd do usuário proprietário deve ser um valor positivo")]
         public int? CdUsuarioProprietario { get; set; }
 
         /// <summary>
         /// IDs das tags a serem associadas à tarefa
         /// </summary>
-        public ICollection<int>? TagIds { get; set; }
+        public ICollection<int>? TagCds { get; set; }
     }
 }

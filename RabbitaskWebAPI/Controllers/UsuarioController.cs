@@ -35,31 +35,31 @@ namespace RabbitaskWebAPI.Controllers
 
         #region Endpoints
 
-        [HttpGet("health")]
-        public ActionResult<ApiResponse<HealthStatusDto>> HealthCheck()
-        {
-            try
-            {
-                var canConnect = _context.Database.CanConnect();
+        //[HttpGet("health")]
+        //public ActionResult<ApiResponse<HealthStatusDto>> HealthCheck()
+        //{
+        //    try
+        //    {
+        //        var canConnect = _context.Database.CanConnect();
 
-                var healthStatus = new HealthStatusDto
-                {
-                    Status = canConnect ? "Healthy" : "Degraded",
-                    Timestamp = DateTime.UtcNow,
-                    DatabaseConnection = canConnect,
-                    Version = "1.0.0"
-                };
+        //        var healthStatus = new HealthStatusDto
+        //        {
+        //            Status = canConnect ? "Healthy" : "Degraded",
+        //            Timestamp = DateTime.UtcNow,
+        //            DatabaseConnection = canConnect,
+        //            Version = "1.0.0"
+        //        };
 
-                return SuccessResponse(healthStatus, "API está funcionando corretamente");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<HealthStatusDto>(ex, nameof(HealthCheck));
-            }
-        }
+        //        return SuccessResponse(healthStatus, "API está funcionando corretamente");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return HandleException<HealthStatusDto>(ex, nameof(HealthCheck));
+        //    }
+        //}
 
         [HttpPost]
-        public async Task<ActionResult<ApiResponse<UsuarioCriadoDto>>> CadastrarUsuario([FromBody] CadastrarUsuarioRequest request) 
+        public async Task<ActionResult<ApiResponse<UsuarioCriadoDto>>> CadastrarUsuario([FromQuery] CadastrarUsuarioRequest request) 
         {
             {
                 try
@@ -136,8 +136,8 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login([FromBody] LoginRequest request) 
-            {
+        public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login([FromQuery] LoginRequest request) 
+        {
             try
             {
                 _logger.LogInformation("Tentativa de login para email: {Email}", request.Email);

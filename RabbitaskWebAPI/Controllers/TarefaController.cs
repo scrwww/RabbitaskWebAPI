@@ -100,7 +100,7 @@ namespace RabbitaskWebAPI.Controllers
         /// Demonstra como a lógica de negócio fica mais clara sem código repetitivo
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa([FromBody] CriarTarefaRequest request)
+        public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa([FromQuery] CriarTarefaRequest request)
         {
             try
             {
@@ -138,9 +138,9 @@ namespace RabbitaskWebAPI.Controllers
                     await _context.SaveChangesAsync();
 
                     // Associar tags se fornecidas
-                    if (request.TagIds?.Any() == true)
+                    if (request.TagCds?.Any() == true)
                     {
-                        await AssociarTagsATarefa(novaTarefa.CdTarefa, request.TagIds);
+                        await AssociarTagsATarefa(novaTarefa.CdTarefa, request.TagCds);
                     }
 
                     await transaction.CommitAsync();
