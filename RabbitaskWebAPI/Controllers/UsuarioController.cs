@@ -1,320 +1,441 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using RabbitaskWebAPI.Data;
-using RabbitaskWebAPI.Models;
 using RabbitaskWebAPI.DTOs.Common;
 using RabbitaskWebAPI.DTOs.Usuario;
-using RabbitaskWebAPI.DTOs.TipoUsuario;
-using System.ComponentModel.DataAnnotations;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using System.Text.RegularExpressions;
-using RabbitaskWebAPI.RequestModels.Usuario;
+using RabbitaskWebAPI.Models;
+using RabbitaskWebAPI.Services;
 
 namespace RabbitaskWebAPI.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]
+    [Authorize]
     public class UsuarioController : BaseController
     {
         private readonly RabbitaskContext _context;
-        private readonly IConfiguration _configuration;
-
-        private const int MIN_PASSWORD_LENGTH = 8;
-        private const int JWT_EXPIRY_HOURS = 2;
-
-        public UsuarioController(RabbitaskContext context, ILogger<UsuarioController> logger, IConfiguration configuration)
+        private readonly Services.IUserAuthorizationService _authService;
+        public UsuarioController(
+            RabbitaskContext context,
+            Services.IUserAuthorizationService authService,
+            ILogger<UsuarioController> logger)
             : base(logger)
         {
             _context = context;
-            _configuration = configuration;
+            _authService = authService;
         }
 
-        #region Endpoints
-
-        [HttpGet("health")]
-        public ActionResult<ApiResponse<HealthStatusDto>> HealthCheck()
+        /// <summary>
+        /// Pega o dados do usuário atual
+        /// </summary>
+        [HttpGet("eu")]
+        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetCurrentUser()
         {
             try
             {
-                var canConnect = _context.Database.CanConnect();
-
-                var healthStatus = new HealthStatusDto
-                {
-                    Status = canConnect ? "Healthy" : "Degraded",
-                    Timestamp = DateTime.UtcNow,
-                    DatabaseConnection = canConnect,
-                    Version = "1.0.0"
-                };
-
-                return SuccessResponse(healthStatus, "API está funcionando corretamente");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<HealthStatusDto>(ex, nameof(HealthCheck));
-            }
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<ApiResponse<UsuarioCriadoDto>>> CadastrarUsuario([FromBody] CadastrarUsuarioRequest request) 
-        {
-            {
-                try
-                {
-                    if (!IsValidEmail(request.Email))
-                        throw new ArgumentException("Formato de email inválido");
-
-                    if (!IsValidPhoneNumber(request.Telefone))
-                        throw new ArgumentException("Formato de telefone inválido");
-
-                    using var transaction = await _context.Database.BeginTransactionAsync();
-                    try
-                    {
-                        var existingUser = await _context.Usuarios
-                            .FirstOrDefaultAsync(u => u.NmEmail == request.Email.ToLower().Trim()
-                                                   || (request.Telefone != null && u.CdTelefone == request.Telefone));
-
-                        if (existingUser != null)
-                        {
-                            if (existingUser.NmEmail == request.Email.ToLower().Trim())
-                                return ErrorResponse<UsuarioCriadoDto>(409, "Email já está em uso", "Este email já está cadastrado");
-
-                            if (existingUser.CdTelefone == request.Telefone)
-                                return ErrorResponse<UsuarioCriadoDto>(409, "Telefone já está em uso", "Este telefone já está cadastrado");
-                        }
-
-                        var tipoUsuarioValido = await _context.TipoUsuarios
-                            .AnyAsync(t => t.CdTipoUsuario == request.TipoUsuario);
-
-                        if (!tipoUsuarioValido)
-                            throw new ArgumentException("O tipo de usuário informado não existe");
-
-                        var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Senha);
-
-                        var novoUsuario = new Usuario
-                        {
-                            NmUsuario = request.Nome.Trim(),
-                            NmEmail = request.Senha.ToLower().Trim(),
-                            NmSenha = hashedPassword,
-                            CdTipoUsuario = request.TipoUsuario,
-                            CdTelefone = request.Telefone?.Trim()
-                        };
-
-                        _context.Usuarios.Add(novoUsuario);
-                        await _context.SaveChangesAsync();
-                        await transaction.CommitAsync();
-
-                        _logger.LogInformation("Usuário {UsuarioId} cadastrado. Email: {Email}",
-                            novoUsuario.CdUsuario, novoUsuario.NmEmail);
-
-                        var dto = new UsuarioCriadoDto
-                        {
-                            Cd = novoUsuario.CdUsuario,
-                            Nome = novoUsuario.NmUsuario,
-                            Email = novoUsuario.NmEmail,
-                            TipoUsuario = request.TipoUsuario
-                        };
-
-                        return CreatedAtAction(nameof(GetUsuarioPorCd),
-                            new { cd = novoUsuario.CdUsuario },
-                            ApiResponse<UsuarioCriadoDto>.CreateSuccess(dto, "Usuário cadastrado com sucesso"));
-                    }
-                    catch
-                    {
-                        await transaction.RollbackAsync();
-                        throw;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return HandleException<UsuarioCriadoDto>(ex, nameof(CadastrarUsuario));
-                }
-            }
-        }
-
-        [HttpPost("login")]
-        public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login([FromBody] LoginRequest request) 
-            {
-            try
-            {
-                _logger.LogInformation("Tentativa de login para email: {Email}", request.Email);
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
 
                 var usuario = await _context.Usuarios
                     .Include(u => u.CdTipoUsuarioNavigation)
-                    .FirstOrDefaultAsync(u => u.NmEmail == request.Email.ToLower().Trim());
-
-                if (usuario == null || !BCrypt.Net.BCrypt.Verify(request.Senha, usuario.NmSenha))
-                {
-                    _logger.LogWarning("Tentativa de login falhou para email: {Email}", request.Email);
-                    return ErrorResponse<LoginResponseDto>(401, "Credenciais inválidas");
-                }
-
-                var token = await GerarTokenJWT(usuario);
-
-                var dto = new LoginResponseDto
-                {
-                    Token = token.TokenString,
-                    Usuario = new UsuarioDto
-                    {
-                        Cd = usuario.CdUsuario,
-                        Nome = usuario.NmUsuario,
-                        Email = usuario.NmEmail,
-                        TipoUsuario = usuario.CdTipoUsuarioNavigation != null ? new TipoUsuarioDto
-                        {
-                            Cd = usuario.CdTipoUsuarioNavigation.CdTipoUsuario,
-                            Nome = usuario.CdTipoUsuarioNavigation.NmTipoUsuario
-                        } : null
-                    },
-                    ExpiresAt = token.ExpiresAt
-                };
-
-                return SuccessResponse(dto, "Login realizado com sucesso");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<LoginResponseDto>(ex, nameof(Login));
-            }
-        }
-
-        [HttpGet("perfil")]
-        [Authorize]
-        public async Task<ActionResult<ApiResponse<UsuarioPerfilDto>>> GetPerfilUsuario()
-        {
-            try
-            {
-                var cdUsuario = ObterIdUsuarioAutenticado();
-
-                var usuario = await _context.Usuarios
-                    .Include(u => u.CdTipoUsuarioNavigation)
-                    .Where(u => u.CdUsuario == cdUsuario)
-                    .Select(u => new UsuarioPerfilDto
+                    .Where(u => u.CdUsuario == cdUsuarioAtual)
+                    .Select(u => new UsuarioDto
                     {
                         Cd = u.CdUsuario,
                         Nome = u.NmUsuario,
                         Email = u.NmEmail,
                         Telefone = u.CdTelefone,
-                        TipoUsuario = u.CdTipoUsuarioNavigation != null ? new TipoUsuarioDto
-                        {
-                            Cd = u.CdTipoUsuarioNavigation.CdTipoUsuario,
-                            Nome = u.CdTipoUsuarioNavigation.NmTipoUsuario
-                        } : null
+                        TipoUsuario = u.CdTipoUsuarioNavigation != null
+                            ? u.CdTipoUsuarioNavigation.NmTipoUsuario
+                            : null
                     })
                     .FirstOrDefaultAsync();
 
                 if (usuario == null)
-                    return ErrorResponse<UsuarioPerfilDto>(404, "Usuário não encontrado");
+                {
+                    return ErrorResponse<UsuarioDto>(404, "Usuário não encontrado");
+                }
 
-                return SuccessResponse(usuario, "Perfil encontrado com sucesso");
+                return SuccessResponse(usuario, "Perfil carregado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<UsuarioPerfilDto>(ex, nameof(GetPerfilUsuario));
+                return HandleException<UsuarioDto>(ex, nameof(GetCurrentUser));
             }
         }
 
-        [HttpGet("{cd:int}")]
-        [Authorize]
-        public async Task<ActionResult<ApiResponse<UsuarioPerfilDto>>> GetUsuarioPorCd(int cd)
+        /// <summary>
+        /// Pega todos os usuários gerenciados pelo agente
+        /// Retorna apenas a si msm + usuarios conectados se for Agente
+        /// </summary>
+        [HttpGet("gerenciaveis")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetUsuariosGerenciaveis()
         {
             try
             {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+
+                var usuarios = await _context.Usuarios
+                    .Where(u => cdUsuariosGeridos.Contains(u.CdUsuario))
+                    .Select(u => new UsuarioResumoDto
+                    {
+                        Cd = u.CdUsuario,
+                        Nome = u.NmUsuario,
+                        Email = u.NmEmail
+                    })
+                    .OrderBy(u => u.Nome)
+                    .ToListAsync();
+
+                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                    usuarios,
+                    $"Encontrados {usuarios.Count} usuários gerenciáveis");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetUsuariosGerenciaveis));
+            }
+        }
+
+        /// <summary>
+        /// Pega o usuário por cd (se tiver permissão)
+        /// </summary>
+        [HttpGet("{Codigo:int}")]
+        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetUsuario(int pCodigo)
+        {
+            try
+            {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+
+                // CHECAGEM MAROTA DE PERMISSÃO
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, pCodigo))
+                {
+                    return ErrorResponse<UsuarioDto>(403,
+                        "Você não tem permissão para acessar este usuário");
+                }
+
                 var usuario = await _context.Usuarios
                     .Include(u => u.CdTipoUsuarioNavigation)
-                    .Where(u => u.CdUsuario == cd)
-                    .Select(u => new UsuarioPerfilDto
+                    .Where(u => u.CdUsuario == pCodigo)
+                    .Select(u => new UsuarioDto
                     {
                         Cd = u.CdUsuario,
                         Nome = u.NmUsuario,
                         Email = u.NmEmail,
                         Telefone = u.CdTelefone,
-                        TipoUsuario = u.CdTipoUsuarioNavigation != null ? new TipoUsuarioDto
-                        {
-                            Cd = u.CdTipoUsuarioNavigation.CdTipoUsuario,
-                            Nome = u.CdTipoUsuarioNavigation.NmTipoUsuario
-                        } : null
+                        TipoUsuario = u.CdTipoUsuarioNavigation != null
+                            ? u.CdTipoUsuarioNavigation.NmTipoUsuario
+                            : null
                     })
                     .FirstOrDefaultAsync();
 
                 if (usuario == null)
-                    return ErrorResponse<UsuarioPerfilDto>(404, "Usuário não encontrado");
+                {
+                    return ErrorResponse<UsuarioDto>(404, "Usuário não encontrado");
+                }
 
                 return SuccessResponse(usuario, "Usuário encontrado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<UsuarioPerfilDto>(ex, nameof(GetUsuarioPorCd));
+                return HandleException<UsuarioDto>(ex, nameof(GetUsuario));
             }
         }
 
-        [HttpGet("debug/claims")]
-        [Authorize]
-        public ActionResult<ApiResponse<object>> DebugClaims()
+        /// <summary>
+        /// Atualiza as info do usuário
+        /// </summary>
+        [HttpPut("eu")]
+        public async Task<ActionResult<ApiResponse<object>>> UpdateCurrentUser(
+            [FromBody] UsuarioUpdateDto dto)
         {
-#if DEBUG
-            var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
-            return SuccessResponse<object>(new
+            try
             {
-                Claims = claims,
-                IsAuthenticated = User.Identity?.IsAuthenticated ?? false,
-                AuthenticationType = User.Identity?.AuthenticationType
-            }, "Debug de claims");
-#else
-            return NotFound();
-#endif
-        }
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToArray();
 
-        #endregion
+                    return ErrorResponse<object>(400, "Dados inválidos fornecidos", errors);
+                }
 
-        #region Métodos Privados
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
 
-        private static bool IsValidEmail(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email)) return false;
-            var emailRegex = new Regex(@"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$");
-            return emailRegex.IsMatch(email);
-        }
+                var usuario = await _context.Usuarios.FindAsync(cdUsuarioAtual);
+                if (usuario == null)
+                {
+                    return ErrorResponse<object>(404, "Usuário não encontrado");
+                }
 
-        private static bool IsValidPhoneNumber(string? phoneNumber)
-        {
-            if (string.IsNullOrWhiteSpace(phoneNumber)) return true;
-            var numbersOnly = Regex.Replace(phoneNumber, @"[^\d]", "");
-            return numbersOnly.Length >= 10 && numbersOnly.Length <= 11;
-        }
+                if (!string.IsNullOrWhiteSpace(dto.Nome))
+                    usuario.NmUsuario = dto.Nome.Trim();
 
-        private async Task<(string TokenString, DateTime ExpiresAt)> GerarTokenJWT(Usuario usuario)
-        {
-            var jwtConfig = _configuration.GetSection("JwtConfig");
-            var expiresAt = DateTime.UtcNow.AddHours(JWT_EXPIRY_HOURS);
+                if (!string.IsNullOrWhiteSpace(dto.Email))
+                {
+                    var emailExists = await _context.Usuarios
+                        .AnyAsync(u => u.NmEmail == dto.Email && u.CdUsuario != cdUsuarioAtual);
 
-            var claims = new List<Claim>
+                    if (emailExists)
+                    {
+                        return ErrorResponse<object>(409, "Email já está em uso");
+                    }
+
+                    usuario.NmEmail = dto.Email.Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Telefone))
+                    usuario.CdTelefone = dto.Telefone.Trim();
+
+                if (!string.IsNullOrWhiteSpace(dto.NovaSenha))
+                {
+                   
+                    usuario.NmSenha = HasherSenha.Hash(dto.NovaSenha);
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Usuário {CdUsuario} atualizou seu perfil", cdUsuarioAtual);
+
+                return SuccessResponse("Perfil atualizado com sucesso");
+            }
+            catch (Exception ex)
             {
-                new Claim(JwtRegisteredClaimNames.Sub, usuario.CdUsuario.ToString()),
-                new Claim(ClaimTypes.NameIdentifier, usuario.CdUsuario.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, usuario.NmEmail ?? string.Empty),
-                new Claim(ClaimTypes.Email, usuario.NmEmail ?? string.Empty),
-                new Claim(ClaimTypes.Name, usuario.NmUsuario ?? string.Empty),
-                new Claim("tipo_usuario", usuario.CdTipoUsuario?.ToString() ?? ""),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
-            };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig["Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var token = new JwtSecurityToken(
-                issuer: jwtConfig["Issuer"],
-                audience: jwtConfig["Audience"],
-                claims: claims,
-                expires: expiresAt,
-                signingCredentials: creds
-            );
-
-            return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+                return HandleException<object>(ex, nameof(UpdateCurrentUser));
+            }
         }
 
-        #endregion
+        /// <summary>
+        /// Atualiza os dados do usuario - esse é pro agente
+        /// </summary>
+        [HttpPut("{Codigo:int}")]
+        public async Task<ActionResult<ApiResponse<object>>> UpdateUsuario(
+            int pCodigo,
+            [FromBody] UsuarioUpdateDto dto)
+        {
+            try
+            {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, pCodigo))
+                {
+                    return ErrorResponse<object>(403,
+                        "Você não tem permissão para atualizar este usuário");
+                }
+
+                var usuario = await _context.Usuarios.FindAsync(pCodigo);
+                if (usuario == null)
+                {
+                    return ErrorResponse<object>(404, "Usuário não encontrado");
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Nome))
+                    usuario.NmUsuario = dto.Nome.Trim();
+
+                if (!string.IsNullOrWhiteSpace(dto.Email))
+                {
+                    var emailExists = await _context.Usuarios
+                        .AnyAsync(u => u.NmEmail == dto.Email && u.CdUsuario != pCodigo);
+
+                    if (emailExists)
+                    {
+                        return ErrorResponse<object>(409, "Email já está em uso");
+                    }
+
+                    usuario.NmEmail = dto.Email.Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Telefone))
+                    usuario.CdTelefone = dto.Telefone.Trim();
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Usuário {ManagerId} atualizou o perfil do usuário {UserId}",
+                    cdUsuarioAtual, pCodigo);
+
+                return SuccessResponse("Usuário atualizado com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<object>(ex, nameof(UpdateUsuario));
+            }
+        }
+
+        /// <summary>
+        /// Pega as estatísticas do usuário (task counts, taxa de cumprimento, etc.)
+        /// </summary>
+        [HttpGet("{Codigo:int}/estatisticas")]
+        public async Task<ActionResult<ApiResponse<UsuarioEstatisticasDto>>> GetEstatisticas(int pCodigo)
+        {
+            try
+            {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, pCodigo))
+                {
+                    return ErrorResponse<UsuarioEstatisticasDto>(403,
+                        "Você não tem permissão para acessar as estatísticas deste usuário");
+                }
+
+                var tarefas = await _context.Tarefas
+                    .Where(t => t.CdUsuario == pCodigo)
+                    .ToListAsync();
+
+                var totalTarefas = tarefas.Count;
+                var tarefasConcluidas = tarefas.Count(t => t.DtConclusao.HasValue);
+                var tarefasPendentes = totalTarefas - tarefasConcluidas;
+                var tarefasAtrasadas = tarefas
+                    .Count(t => !t.DtConclusao.HasValue
+                             && t.DtPrazo.HasValue
+                             && t.DtPrazo.Value < DateTime.Now);
+
+                var estatisticas = new UsuarioEstatisticasDto
+                {
+                    TotalTarefas = totalTarefas,
+                    TarefasConcluidas = tarefasConcluidas,
+                    TarefasPendentes = tarefasPendentes,
+                    TarefasAtrasadas = tarefasAtrasadas,
+                    TaxaConclusao = totalTarefas > 0
+                        ? Math.Round((double)tarefasConcluidas / totalTarefas * 100, 2)
+                        : 0
+                };
+
+                return SuccessResponse(estatisticas, "Estatísticas carregadas com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<UsuarioEstatisticasDto>(ex, nameof(GetEstatisticas));
+            }
+        }
+
+        /// <summary>
+        /// Pega todos os usuarios conectados ao agente autenticado
+        /// </summary>
+        [HttpGet("meus-usuarios")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetMeusUsuarios()
+        {
+            try
+            {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+
+                // checa se é Agente
+                var isAgente = await _authService.IsAgenteAsync(cdUsuarioAtual);
+                if (!isAgente)
+                {
+                    return ErrorResponse<IEnumerable<UsuarioResumoDto>>(403,
+                        "Apenas Agentes podem acessar esta funcionalidade");
+                }
+
+                var usuarios = await _context.ConexaoUsuarios
+                    .Where(c => c.CdUsuarioAgente == cdUsuarioAtual)
+                    .Include(c => c.CdUsuarioNavigation)
+                    .Select(c => new UsuarioResumoDto
+                    {
+                        Cd = c.CdUsuarioNavigation.CdUsuario,
+                        Nome = c.CdUsuarioNavigation.NmUsuario,
+                        Email = c.CdUsuarioNavigation.NmEmail
+                    })
+                    .OrderBy(u => u.Nome)
+                    .ToListAsync();
+
+                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                    usuarios,
+                    $"Encontrados {usuarios.Count} usuários gerenciados");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusUsuarios));
+            }
+        }
+
+        /// <summary>
+        /// Conecta um agente a um usuário comum
+        /// </summary>
+        [HttpPost("conectar")]
+        public async Task<ActionResult<ApiResponse<object>>> ConectarUsuarios(
+            [FromBody] ConectarUsuariosDto dto)
+        {
+            try
+            {
+                var agente = await _context.Usuarios
+                    .FirstOrDefaultAsync(u => u.CdUsuario == dto.CdAgente && u.CdTipoUsuario == 2);
+
+                if (agente == null)
+                {
+                    return ErrorResponse<object>(404, "Agente não encontrado");
+                }
+
+                var usuario = await _context.Usuarios
+                    .FirstOrDefaultAsync(u => u.CdUsuario == dto.CdUsuario && u.CdTipoUsuario == 1);
+
+                if (usuario == null)
+                {
+                    return ErrorResponse<object>(404, "Usuário não encontrado");
+                }
+
+                // checar se a conexão já existe... - v -
+                var connectionExists = await _context.ConexaoUsuarios
+                    .AnyAsync(c => c.CdUsuarioAgente == dto.CdAgente && c.CdUsuario == dto.CdUsuario);
+
+                if (connectionExists)
+                {
+                    return ErrorResponse<object>(409, "Conexão já existe");
+                }
+
+                // CONNECT THEM HEHEHE
+                var conexao = new ConexaoUsuario
+                {
+                    CdUsuarioAgente = dto.CdAgente,
+                    CdUsuario = dto.CdUsuario
+                };
+
+                _context.ConexaoUsuarios.Add(conexao);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Agente {CdUsuarioAgente} conectado ao usuário {CdUsuario}",
+                    dto.CdAgente, dto.CdUsuario);
+
+                return SuccessResponse("Usuários conectados com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<object>(ex, nameof(ConectarUsuarios));
+            }
+        }
+
+        /// <summary>
+        /// Disconecta um Agente de um Usuario Comum
+        /// </summary>
+        [HttpDelete("desconectar")]
+        public async Task<ActionResult<ApiResponse<object>>> DesconectarUsuarios(
+            [FromQuery] int cdAgente,
+            [FromQuery] int cdUsuario)
+        {
+            try
+            {
+                var conexao = await _context.ConexaoUsuarios
+                    .FirstOrDefaultAsync(c => c.CdUsuarioAgente == cdAgente && c.CdUsuario == cdUsuario);
+
+                if (conexao == null)
+                {
+                    return ErrorResponse<object>(404, "Conexão não encontrada");
+                }
+
+                _context.ConexaoUsuarios.Remove(conexao);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Agente {CdUsuarioAgente} desconectado do usuário {CdUsuario}",
+                    cdAgente, cdUsuario);
+
+                return SuccessResponse("Usuários desconectados com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<object>(ex, nameof(DesconectarUsuarios));
+            }
+        }
     }
 }

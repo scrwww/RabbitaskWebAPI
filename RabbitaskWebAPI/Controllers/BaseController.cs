@@ -8,7 +8,7 @@ namespace RabbitaskWebAPI.Controllers
 {
     /// <summary>
     /// Controller base com funcionalidades comuns a todos os controllers
-    /// Centraliza lógica repetitiva e padroniza comportamentos
+    /// Centraliza lógica repetitiva e padroniza comportamentos - especialmente os das respostas :D
     /// </summary>
     [ApiController]
     public abstract class BaseController : ControllerBase
@@ -21,8 +21,8 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         /// <summary>
-        /// Extrai o ID do usuário autenticado do token JWT
-        /// Método protegido disponível para todos os controllers filhos
+        /// extrai o ID do usuário autenticado do token JWT
+        /// método protegido disponível para todos os controllers filhos
         /// </summary>
         protected int ObterIdUsuarioAutenticado()
         {
@@ -46,20 +46,19 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         /// <summary>
-        /// Obtém informações básicas do usuário autenticado
+        /// pega informações básicas do usuário autenticado
         /// </summary>
         protected (int Id, string Email, string Nome) ObterInfoUsuarioAutenticado()
         {
-            var id = ObterIdUsuarioAutenticado();
+            var codig = ObterIdUsuarioAutenticado();
             var email = User.FindFirst(ClaimTypes.Email)?.Value ?? "";
             var nome = User.FindFirst(ClaimTypes.Name)?.Value ?? "";
 
-            return (id, email, nome);
+            return (codig, email, nome);
         }
 
         /// <summary>
-        /// Métodos de conveniência para respostas padronizadas
-        /// Reduzem verbosidade e garantem consistência
+        /// respostas padronizada.. isso foi bme útil
         /// </summary>
         protected ActionResult<ApiResponse<T>> SuccessResponse<T>(T data, string message = "Operação realizada com sucesso")
         {
@@ -87,7 +86,7 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         /// <summary>
-        /// Trata exceções de forma padronizada
+        /// Tratar as exceções
         /// </summary>
         protected ActionResult<ApiResponse<T>> HandleException<T>(Exception ex, string operationName)
         {

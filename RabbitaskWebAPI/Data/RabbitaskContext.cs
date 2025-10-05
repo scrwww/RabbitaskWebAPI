@@ -26,17 +26,28 @@ namespace RabbitaskWebAPI.Data
         public virtual DbSet<TipoUsuario> TipoUsuarios { get; set; } = null!;
         public virtual DbSet<Topico> Topicos { get; set; } = null!;
         public virtual DbSet<Usuario> Usuarios { get; set; } = null!;
+        public virtual DbSet<ConexaoUsuario> ConexaoUsuarios { get; set; } = null!;
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            if (!optionsBuilder.IsConfigured)
+            {
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
+                optionsBuilder.UseMySQL("Server=localhost;Port=3306;Database=rabbitask;Uid=root;Pwd=root;");
+            }
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Anexo>(entity =>
             {
-                entity.HasKey(e => e.CdAnexo)
+                entity.HasKey(e => new { e.CdAnexo, e.CdUsuario, e.CdTarefa })
                     .HasName("PRIMARY");
 
-                entity.HasOne(d => d.CdTarefaNavigation)
+                entity.HasOne(d => d.Cd)
                     .WithMany(p => p.Anexos)
-                    .HasForeignKey(d => d.CdTarefa)
+                    .HasForeignKey(d => new { d.CdUsuario, d.CdTarefa })
+                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("fk_anexo_tarefa");
             });
 
@@ -51,21 +62,23 @@ namespace RabbitaskWebAPI.Data
                 entity.HasKey(e => e.CdTag)
                     .HasName("PRIMARY");
 
-                entity.HasMany(d => d.CdTarefas)
+                entity.HasMany(d => d.Cds)
                     .WithMany(p => p.CdTags)
                     .UsingEntity<Dictionary<string, object>>(
                         "TarefaTag",
-                        l => l.HasOne<Tarefa>().WithMany().HasForeignKey("CdTarefa").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_tarefa_tag_tarefa"),
+                        l => l.HasOne<Tarefa>().WithMany().HasForeignKey("CdUsuario", "CdTarefa").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_tarefa_tag_tarefa"),
                         r => r.HasOne<Tag>().WithMany().HasForeignKey("CdTag").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_tarefa_tag_tag"),
                         j =>
                         {
-                            j.HasKey("CdTag", "CdTarefa").HasName("PRIMARY");
+                            j.HasKey("CdTag", "CdUsuario", "CdTarefa").HasName("PRIMARY");
 
                             j.ToTable("tarefa_tag");
 
-                            j.HasIndex(new[] { "CdTarefa" }, "fk_tarefa_tag_tarefa");
+                            j.HasIndex(new[] { "CdUsuario", "CdTarefa" }, "fk_tarefa_tag_tarefa");
 
                             j.IndexerProperty<int>("CdTag").HasColumnName("cd_tag");
+
+                            j.IndexerProperty<int>("CdUsuario").HasColumnName("cd_usuario");
 
                             j.IndexerProperty<int>("CdTarefa").HasColumnName("cd_tarefa");
                         });
@@ -73,7 +86,7 @@ namespace RabbitaskWebAPI.Data
 
             modelBuilder.Entity<Tarefa>(entity =>
             {
-                entity.HasKey(e => e.CdTarefa)
+                entity.HasKey(e => new { e.CdUsuario, e.CdTarefa })
                     .HasName("PRIMARY");
 
                 entity.HasOne(d => d.CdPrioridadeNavigation)
@@ -84,6 +97,7 @@ namespace RabbitaskWebAPI.Data
                 entity.HasOne(d => d.CdUsuarioNavigation)
                     .WithMany(p => p.TarefaCdUsuarioNavigations)
                     .HasForeignKey(d => d.CdUsuario)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("fk_tarefa_usuario");
 
                 entity.HasOne(d => d.CdUsuarioProprietarioNavigation)
@@ -94,20 +108,20 @@ namespace RabbitaskWebAPI.Data
 
             modelBuilder.Entity<TarefaFeedback>(entity =>
             {
-                entity.HasKey(e => new { e.CdTipoSentimento, e.CdTarefa })
+                entity.HasKey(e => new { e.CdTipoSentimento, e.CdUsuario, e.CdTarefa })
                     .HasName("PRIMARY");
-
-                entity.HasOne(d => d.CdTarefaNavigation)
-                    .WithMany(p => p.TarefaFeedbacks)
-                    .HasForeignKey(d => d.CdTarefa)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("fk_tarefa_feedback_tarefa");
 
                 entity.HasOne(d => d.CdTipoSentimentoNavigation)
                     .WithMany(p => p.TarefaFeedbacks)
                     .HasForeignKey(d => d.CdTipoSentimento)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("fk_tarefa_feedback_tipo_sentimento");
+
+                entity.HasOne(d => d.Cd)
+                    .WithMany(p => p.TarefaFeedbacks)
+                    .HasForeignKey(d => new { d.CdUsuario, d.CdTarefa })
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("fk_tarefa_feedback_tarefa");
             });
 
             modelBuilder.Entity<TipoSentimento>(entity =>
@@ -124,12 +138,13 @@ namespace RabbitaskWebAPI.Data
 
             modelBuilder.Entity<Topico>(entity =>
             {
-                entity.HasKey(e => e.CdTopico)
+                entity.HasKey(e => new { e.CdTopico, e.CdUsuario, e.CdTarefa })
                     .HasName("PRIMARY");
 
-                entity.HasOne(d => d.CdTarefaNavigation)
+                entity.HasOne(d => d.Cd)
                     .WithMany(p => p.Topicos)
-                    .HasForeignKey(d => d.CdTarefa)
+                    .HasForeignKey(d => new { d.CdUsuario, d.CdTarefa })
+                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("fk_topico_tarefa");
             });
 
@@ -142,44 +157,39 @@ namespace RabbitaskWebAPI.Data
                     .WithMany(p => p.Usuarios)
                     .HasForeignKey(d => d.CdTipoUsuario)
                     .HasConstraintName("fk_usuario_tipo_usuario");
+            });
 
-                entity.HasMany(d => d.CdUsuarioAgentes)
-                    .WithMany(p => p.CdUsuarios)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConexaoUsuario",
-                        l => l.HasOne<Usuario>().WithMany().HasForeignKey("CdUsuarioAgente").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_conexao_usuario_agente_usuario"),
-                        r => r.HasOne<Usuario>().WithMany().HasForeignKey("CdUsuario").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_conexao_usuario_usuario"),
-                        j =>
-                        {
-                            j.HasKey("CdUsuario", "CdUsuarioAgente").HasName("PRIMARY");
+            modelBuilder.Entity<ConexaoUsuario>(entity =>
+            {
+                entity.HasKey(e => new { e.CdUsuario, e.CdUsuarioAgente })
+                    .HasName("PRIMARY");
 
-                            j.ToTable("conexao_usuario");
+                entity.ToTable("conexao_usuario");
 
-                            j.HasIndex(new[] { "CdUsuarioAgente" }, "fk_conexao_usuario_agente_usuario");
+                entity.Property(e => e.CdUsuario)
+                    .HasColumnName("cd_usuario")
+                    .IsRequired();
 
-                            j.IndexerProperty<int>("CdUsuario").HasColumnName("cd_usuario");
+                entity.Property(e => e.CdUsuarioAgente)
+                    .HasColumnName("cd_usuario_agente")
+                    .IsRequired();
 
-                            j.IndexerProperty<int>("CdUsuarioAgente").HasColumnName("cd_usuario_agente");
-                        });
+                // Foreign key to Usuario (Usuario Comum sendo gerido)
+                entity.HasOne(d => d.CdUsuarioNavigation)
+                    .WithMany()
+                    .HasForeignKey(d => d.CdUsuario)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("fk_conexao_usuario_usuario");
 
-                entity.HasMany(d => d.CdUsuarios)
-                    .WithMany(p => p.CdUsuarioAgentes)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConexaoUsuario",
-                        l => l.HasOne<Usuario>().WithMany().HasForeignKey("CdUsuario").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_conexao_usuario_usuario"),
-                        r => r.HasOne<Usuario>().WithMany().HasForeignKey("CdUsuarioAgente").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_conexao_usuario_agente_usuario"),
-                        j =>
-                        {
-                            j.HasKey("CdUsuario", "CdUsuarioAgente").HasName("PRIMARY");
+                // Foreign key to Usuario (Agente gerindo)
+                entity.HasOne(d => d.CdUsuarioAgenteNavigation)
+                    .WithMany()
+                    .HasForeignKey(d => d.CdUsuarioAgente)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("fk_conexao_usuario_agente_usuario");
 
-                            j.ToTable("conexao_usuario");
-
-                            j.HasIndex(new[] { "CdUsuarioAgente" }, "fk_conexao_usuario_agente_usuario");
-
-                            j.IndexerProperty<int>("CdUsuario").HasColumnName("cd_usuario");
-
-                            j.IndexerProperty<int>("CdUsuarioAgente").HasColumnName("cd_usuario_agente");
-                        });
+                entity.HasIndex(e => e.CdUsuarioAgente)
+                    .HasDatabaseName("fk_conexao_usuario_agente_usuario");
             });
 
             OnModelCreatingPartial(modelBuilder);

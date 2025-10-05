@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RabbitaskWebAPI.Data;
+using RabbitaskWebAPI.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,16 +15,38 @@ builder.Services.AddDbContext<RabbitaskContext>(options =>
 ));
 
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RabbitaskWebAPI.Services.IUserAuthorizationService,
+                           RabbitaskWebAPI.Services.UserAuthorizationService>();
 
-// Read JWT config from secrets.json
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ManageUser", policy =>
+        policy.Requirements.Add(new ManageUserRequirement()));
+
+    options.AddPolicy("AgenteOnly", policy =>
+        policy.RequireAssertion(async context =>
+        {
+            var httpContext = context.Resource as HttpContext;
+            if (httpContext == null) return false;
+
+            var authService = httpContext.RequestServices
+                                         .GetRequiredService<IUserAuthorizationService>();
+            var userId = authService.GetCurrentUserId();
+            return await authService.IsAgenteAsync(userId);
+        }));
+});
+
+builder.Services.AddScoped<IAuthorizationHandler, ManageUserHandler>();
+
 var jwtConfig = builder.Configuration.GetSection("JwtConfig");
 
-// Add JWT authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
+
 .AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -39,11 +63,9 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 
-// Add Swagger + JWT support
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "RabbitaskWebAPI", Version = "v1" });
