@@ -8,7 +8,6 @@ namespace RabbitaskWebAPI.Models
 {
     [Table("tarefa")]
     [Index("CdPrioridade", Name = "fk_tarefa_prioridade")]
-    [Index("CdUsuario", Name = "fk_tarefa_usuario")]
     [Index("CdUsuarioProprietario", Name = "fk_tarefa_usuario_proprietario")]
     public partial class Tarefa
     {
@@ -35,8 +34,9 @@ namespace RabbitaskWebAPI.Models
         public DateTime? DtPrazo { get; set; }
         [Column("cd_usuario_proprietario")]
         public int? CdUsuarioProprietario { get; set; }
+        [Key]
         [Column("cd_usuario")]
-        public int? CdUsuario { get; set; }
+        public int CdUsuario { get; set; }
         [Column("dt_criacao", TypeName = "datetime")]
         public DateTime? DtCriacao { get; set; }
         [Column("dt_conclusao", TypeName = "datetime")]
@@ -47,19 +47,19 @@ namespace RabbitaskWebAPI.Models
         public virtual Prioridade? CdPrioridadeNavigation { get; set; }
         [ForeignKey("CdUsuario")]
         [InverseProperty("TarefaCdUsuarioNavigations")]
-        public virtual Usuario? CdUsuarioNavigation { get; set; }
+        public virtual Usuario CdUsuarioNavigation { get; set; } = null!;
         [ForeignKey("CdUsuarioProprietario")]
         [InverseProperty("TarefaCdUsuarioProprietarioNavigations")]
         public virtual Usuario? CdUsuarioProprietarioNavigation { get; set; }
-        [InverseProperty("CdTarefaNavigation")]
+        [InverseProperty("Cd")]
         public virtual ICollection<Anexo> Anexos { get; set; }
-        [InverseProperty("CdTarefaNavigation")]
+        [InverseProperty("Cd")]
         public virtual ICollection<TarefaFeedback> TarefaFeedbacks { get; set; }
-        [InverseProperty("CdTarefaNavigation")]
+        [InverseProperty("Cd")]
         public virtual ICollection<Topico> Topicos { get; set; }
 
-        [ForeignKey("CdTarefa")]
-        [InverseProperty("CdTarefas")]
+        [ForeignKey("CdUsuario,CdTarefa")]
+        [InverseProperty("Cds")]
         public virtual ICollection<Tag> CdTags { get; set; }
     }
 }

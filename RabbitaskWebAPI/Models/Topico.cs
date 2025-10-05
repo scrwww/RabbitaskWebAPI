@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace RabbitaskWebAPI.Models
 {
     [Table("topico")]
-    [Index("CdTarefa", Name = "fk_topico_tarefa")]
+    [Index("CdUsuario", "CdTarefa", Name = "fk_topico_tarefa")]
     public partial class Topico
     {
         [Key]
@@ -16,13 +16,17 @@ namespace RabbitaskWebAPI.Models
         [Column("nm_topico")]
         [StringLength(250)]
         public string? NmTopico { get; set; }
+        [Key]
+        [Column("cd_usuario")]
+        public int CdUsuario { get; set; }
+        [Key]
         [Column("cd_tarefa")]
-        public int? CdTarefa { get; set; }
+        public int CdTarefa { get; set; }
         [Column("ic_concluido")]
         public bool? IcConcluido { get; set; }
 
-        [ForeignKey("CdTarefa")]
+        [ForeignKey("CdUsuario,CdTarefa")]
         [InverseProperty("Topicos")]
-        public virtual Tarefa? CdTarefaNavigation { get; set; }
+        public virtual Tarefa Cd { get; set; } = null!;
     }
 }

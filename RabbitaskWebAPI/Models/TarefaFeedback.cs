@@ -7,12 +7,15 @@ using Microsoft.EntityFrameworkCore;
 namespace RabbitaskWebAPI.Models
 {
     [Table("tarefa_feedback")]
-    [Index("CdTarefa", Name = "fk_tarefa_feedback_tarefa")]
+    [Index("CdUsuario", "CdTarefa", Name = "fk_tarefa_feedback_tarefa")]
     public partial class TarefaFeedback
     {
         [Key]
         [Column("cd_tipo_sentimento")]
         public int CdTipoSentimento { get; set; }
+        [Key]
+        [Column("cd_usuario")]
+        public int CdUsuario { get; set; }
         [Key]
         [Column("cd_tarefa")]
         public int CdTarefa { get; set; }
@@ -20,9 +23,9 @@ namespace RabbitaskWebAPI.Models
         [StringLength(2000)]
         public string? DsFeedback { get; set; }
 
-        [ForeignKey("CdTarefa")]
+        [ForeignKey("CdUsuario,CdTarefa")]
         [InverseProperty("TarefaFeedbacks")]
-        public virtual Tarefa CdTarefaNavigation { get; set; } = null!;
+        public virtual Tarefa Cd { get; set; } = null!;
         [ForeignKey("CdTipoSentimento")]
         [InverseProperty("TarefaFeedbacks")]
         public virtual TipoSentimento CdTipoSentimentoNavigation { get; set; } = null!;

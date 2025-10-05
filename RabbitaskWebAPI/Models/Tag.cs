@@ -11,7 +11,7 @@ namespace RabbitaskWebAPI.Models
     {
         public Tag()
         {
-            CdTarefas = new HashSet<Tarefa>();
+            Cds = new HashSet<Tarefa>();
         }
 
         [Key]
@@ -23,6 +23,6 @@ namespace RabbitaskWebAPI.Models
 
         [ForeignKey("CdTag")]
         [InverseProperty("CdTags")]
-        public virtual ICollection<Tarefa> CdTarefas { get; set; }
+        public virtual ICollection<Tarefa> Cds { get; set; }
     }
 }
