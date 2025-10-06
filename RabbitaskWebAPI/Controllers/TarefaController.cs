@@ -2,13 +2,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RabbitaskWebAPI.Data;
-using RabbitaskWebAPI.Models;
 using RabbitaskWebAPI.DTOs.Common;
+using RabbitaskWebAPI.DTOs.Prioridade;
+using RabbitaskWebAPI.DTOs.Tag;
 using RabbitaskWebAPI.DTOs.Tarefa;
 using RabbitaskWebAPI.DTOs.Usuario;
-using RabbitaskWebAPI.DTOs.Tag;
-using RabbitaskWebAPI.DTOs.Prioridade;
-using RabbitaskWebAPI.Services;
+using RabbitaskWebAPI.Models;
 
 namespace RabbitaskWebAPI.Controllers
 {
@@ -209,7 +208,7 @@ namespace RabbitaskWebAPI.Controllers
         /// tarefa por codigo
         /// </summary>
         [HttpGet("{Codigo:int}")]
-        public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int cdUsuario)
         {
             try
             {
@@ -217,7 +216,7 @@ namespace RabbitaskWebAPI.Controllers
                 var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
 
                 var tarefa = await _context.Tarefas
-                    .Where(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario))
+                    .Where(t => t.CdTarefa == cdUsuario && managedUserIds.Contains(t.CdUsuario))
                     .Include(t => t.CdTags)
                     .Include(t => t.CdPrioridadeNavigation)
                     .Include(t => t.CdUsuarioNavigation)
@@ -302,10 +301,20 @@ namespace RabbitaskWebAPI.Controllers
 
                 using var transaction = await _context.Database.BeginTransactionAsync();
 
+                var ultimoCdTarefaUsuario = await _context.Tarefas
+                    .Where(t => t.CdUsuario == dto.CdUsuario)
+                    .OrderByDescending(t => t.CdTarefa)
+                    .Select(t => t.CdTarefa)
+                    .FirstOrDefaultAsync();
+
+                var proximoCdTarefaUsuario = ultimoCdTarefaUsuario + 1;
+
+
                 try
                 {
                     var novaTarefa = new Tarefa
                     {
+                        CdTarefa = proximoCdTarefaUsuario,
                         NmTarefa = dto.Nome.Trim(),
                         DsTarefa = !string.IsNullOrWhiteSpace(dto.Descricao)
                             ? dto.Descricao.Trim()
@@ -322,7 +331,7 @@ namespace RabbitaskWebAPI.Controllers
 
                     if (dto.TagCds?.Any() == true)
                     {
-                        await AssociarTagsATarefa(novaTarefa.CdTarefa, dto.TagCds);
+                        await AssociarTagsATarefa(novaTarefa.CdTarefa, dto.CdUsuario, dto.TagCds);
                     }
 
                     await transaction.CommitAsync();
@@ -338,10 +347,7 @@ namespace RabbitaskWebAPI.Controllers
                         DataCriacao = novaTarefa.DtCriacao
                     };
 
-                    return CreatedAtAction(
-                        nameof(GetTarefa),
-                        new { id = novaTarefa.CdTarefa },
-                        ApiResponse<TarefaCriadaDto>.CreateSuccess(resultado, "Tarefa criada com sucesso"));
+                    return ApiResponse<TarefaCriadaDto>.CreateSuccess(resultado, "Tarefa criada com sucesso");
                 }
                 catch
                 {
@@ -360,7 +366,7 @@ namespace RabbitaskWebAPI.Controllers
         /// </summary>
         [HttpPut("{Codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> AtualizarTarefa(
-            int pCodigo,
+            int cdUsuario,
             [FromBody] TarefaUpdateDto dto)
         {
             try
@@ -369,7 +375,7 @@ namespace RabbitaskWebAPI.Controllers
                 var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && managedUserIds.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -402,7 +408,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} atualizada pelo usuário {UsuarioId}",
-                    pCodigo, currentUserId);
+                    cdUsuario, currentUserId);
 
                 return SuccessResponse("Tarefa atualizada com sucesso");
             }
@@ -416,7 +422,7 @@ namespace RabbitaskWebAPI.Controllers
         /// deleta a tarefa
         /// </summary>
         [HttpDelete("{Codigo:int}")]
-        public async Task<ActionResult<ApiResponse<object>>> DeletarTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> DeletarTarefa(int cdUsuario)
         {
             try
             {
@@ -424,7 +430,7 @@ namespace RabbitaskWebAPI.Controllers
                 var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && cdUsuariosGeridos.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdUsuariosGeridos.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -436,7 +442,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {CdTarefa} deletada pelo usuário {CdUsuario}",
-                    pCodigo, cdUsuarioAtual);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa deletada com sucesso");
             }
@@ -450,7 +456,7 @@ namespace RabbitaskWebAPI.Controllers
         /// marca como completo
         /// </summary>
         [HttpPatch("{Codigo:int}/concluir")]
-        public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int cdUsuario)
         {
             try
             {
@@ -458,7 +464,7 @@ namespace RabbitaskWebAPI.Controllers
                 var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && cdUsuariosGeridos.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdUsuariosGeridos.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -475,7 +481,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} marcada como concluída pelo usuário {UsuarioId}",
-                    pCodigo, cdUsuarioAtual);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa marcada como concluída");
             }
@@ -489,15 +495,15 @@ namespace RabbitaskWebAPI.Controllers
         /// reabre a tarefa
         /// </summary>
         [HttpPatch("{Codigo:int}/reabrir")]
-        public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int cdUsuario)
         {
             try
             {
-                var currentUserId = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdsUsuariosGerenciados.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -514,7 +520,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} reaberta pelo usuário {UsuarioId}",
-                    pCodigo, currentUserId);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa reaberta com sucesso");
             }
@@ -566,7 +572,7 @@ namespace RabbitaskWebAPI.Controllers
         /// <summary>
         /// nome meio auto explicativo...
         /// </summary>
-        private async Task AssociarTagsATarefa(int tarefaId, IEnumerable<int> tagCds)
+        private async Task AssociarTagsATarefa(int cdTarefa, int cdUsuario, IEnumerable<int> tagCds)
         {
             var tags = await _context.Tags
                 .Where(t => tagCds.Contains(t.CdTag))
@@ -574,7 +580,7 @@ namespace RabbitaskWebAPI.Controllers
 
             var tarefa = await _context.Tarefas
                 .Include(t => t.CdTags)
-                .FirstAsync(t => t.CdTarefa == tarefaId);
+                .FirstAsync(t => t.CdTarefa == cdTarefa);
 
             foreach (var tag in tags)
             {
