@@ -28,13 +28,13 @@ namespace RabbitaskWebAPI.Controllers
             _authService = authService;
         }
 
+        #region GetTarefas
         /// <summary>
-        /// pega todas as tarefas
+        /// pega todas as tarefas baseadas nos filtros
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
             [FromQuery] int? cdUsuario = null,
-            [FromQuery] bool incluirConectados = false,
             [FromQuery] int? cdPrioridade = null,
             [FromQuery] bool? concluidas = null,
             [FromQuery] int pagina = 1,
@@ -129,81 +129,10 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefas));
             }
         }
+        #endregion
 
-        /// <summary>
-        /// pega as tarefas pendentes
-        /// </summary>
-        [HttpGet("pendentes")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefasPendentes(
-            [FromQuery] int? usuarioId = null)
-        {
-            try
-            {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
-                if (usuarioId.HasValue && !managedUserIds.Contains(usuarioId.Value))
-                {
-                    return ErrorResponse<IEnumerable<TarefaDto>>(403,
-                        "Você não tem permissão para acessar tarefas deste usuário");
-                }
-
-                var userIdsToQuery = usuarioId.HasValue
-                    ? new List<int> { usuarioId.Value }
-                    : managedUserIds;
-
-                var tarefas = await _context.Tarefas
-                    .Where(t => userIdsToQuery.Contains(t.CdUsuario) && t.DtConclusao == null)
-                    .Include(t => t.CdTags)
-                    .Include(t => t.CdPrioridadeNavigation)
-                    .Include(t => t.CdUsuarioNavigation)
-                    .Include(t => t.CdUsuarioProprietarioNavigation)
-                    .OrderBy(t => t.DtPrazo)
-                    .Select(t => new TarefaDto
-                    {
-                        Cd = t.CdTarefa,
-                        Nome = t.NmTarefa,
-                        Descricao = t.DsTarefa,
-                        DataPrazo = t.DtPrazo,
-                        DataConclusao = t.DtConclusao,
-                        DataCriacao = t.DtCriacao,
-                        Prioridade = t.CdPrioridadeNavigation != null
-                            ? new PrioridadeDto
-                            {
-                                Cd = t.CdPrioridadeNavigation.CdPrioridade,
-                                Nome = t.CdPrioridadeNavigation.NmPrioridade
-                            }
-                            : null,
-                        Usuario = new UsuarioResumoDto
-                        {
-                            Cd = t.CdUsuarioNavigation.CdUsuario,
-                            Nome = t.CdUsuarioNavigation.NmUsuario
-                        },
-                        UsuarioProprietario = t.CdUsuarioProprietarioNavigation != null
-                            ? new UsuarioResumoDto
-                            {
-                                Cd = t.CdUsuarioProprietarioNavigation.CdUsuario,
-                                Nome = t.CdUsuarioProprietarioNavigation.NmUsuario
-                            }
-                            : null,
-                        Tags = t.CdTags.Select(tag => new TagDto
-                        {
-                            Cd = tag.CdTag,
-                            Nome = tag.NmTag
-                        }).ToList()
-                    })
-                    .ToListAsync();
-
-                return SuccessResponse<IEnumerable<TarefaDto>>(
-                    tarefas,
-                    $"Encontradas {tarefas.Count} tarefas pendentes");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefasPendentes));
-            }
-        }
-
+        #region GetTarefa por código
         /// <summary>
         /// tarefa por codigo
         /// </summary>
@@ -269,9 +198,12 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<TarefaDto>(ex, nameof(GetTarefa));
             }
         }
+        #endregion
 
+
+        #region CriarTarefa
         /// <summary>
-        /// cria uam nova tarefa
+        /// cria uma nova tarefa
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa(
@@ -360,7 +292,9 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<TarefaCriadaDto>(ex, nameof(CriarTarefa));
             }
         }
+        #endregion
 
+        #region AtualizarTarefa
         /// <summary>
         /// atualiza a tarefa
         /// </summary>
@@ -417,7 +351,9 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(AtualizarTarefa));
             }
         }
+        #endregion
 
+        #region DeletarTarefa
         /// <summary>
         /// deleta a tarefa
         /// </summary>
@@ -451,7 +387,9 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(DeletarTarefa));
             }
         }
+        #endregion
 
+        #region ConcluirTarefa
         /// <summary>
         /// marca como completo
         /// </summary>
@@ -489,8 +427,11 @@ namespace RabbitaskWebAPI.Controllers
             {
                 return HandleException<object>(ex, nameof(ConcluirTarefa));
             }
+        
         }
+        #endregion
 
+        #region ReabrirTarefa
         /// <summary>
         /// reabre a tarefa
         /// </summary>
@@ -529,6 +470,7 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(ReabrirTarefa));
             }
         }
+        #endregion
 
         #region Métodos privados de abstração >:D
 
