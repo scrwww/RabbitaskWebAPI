@@ -2,13 +2,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RabbitaskWebAPI.Data;
-using RabbitaskWebAPI.Models;
 using RabbitaskWebAPI.DTOs.Common;
+using RabbitaskWebAPI.DTOs.Prioridade;
+using RabbitaskWebAPI.DTOs.Tag;
 using RabbitaskWebAPI.DTOs.Tarefa;
 using RabbitaskWebAPI.DTOs.Usuario;
-using RabbitaskWebAPI.DTOs.Tag;
-using RabbitaskWebAPI.DTOs.Prioridade;
-using RabbitaskWebAPI.Services;
+using RabbitaskWebAPI.Models;
 
 namespace RabbitaskWebAPI.Controllers
 {
@@ -29,13 +28,13 @@ namespace RabbitaskWebAPI.Controllers
             _authService = authService;
         }
 
+        #region GetTarefas
         /// <summary>
-        /// pega todas as tarefas
+        /// pega todas as tarefas baseadas nos filtros
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
             [FromQuery] int? cdUsuario = null,
-            [FromQuery] bool incluirConectados = false,
             [FromQuery] int? cdPrioridade = null,
             [FromQuery] bool? concluidas = null,
             [FromQuery] int pagina = 1,
@@ -129,87 +128,16 @@ namespace RabbitaskWebAPI.Controllers
             {
                 return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefas));
             }
-        }   
-
-        /// <summary>
-        /// pega as tarefas pendentes
-        /// </summary>
-        [HttpGet("pendentes")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefasPendentes(
-            [FromQuery] int? usuarioId = null)
-        {
-            try
-            {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
-
-                if (usuarioId.HasValue && !managedUserIds.Contains(usuarioId.Value))
-                {
-                    return ErrorResponse<IEnumerable<TarefaDto>>(403,
-                        "Você não tem permissão para acessar tarefas deste usuário");
-                }
-
-                var userIdsToQuery = usuarioId.HasValue
-                    ? new List<int> { usuarioId.Value }
-                    : managedUserIds;
-
-                var tarefas = await _context.Tarefas
-                    .Where(t => userIdsToQuery.Contains(t.CdUsuario) && t.DtConclusao == null)
-                    .Include(t => t.CdTags)
-                    .Include(t => t.CdPrioridadeNavigation)
-                    .Include(t => t.CdUsuarioNavigation)
-                    .Include(t => t.CdUsuarioProprietarioNavigation)
-                    .OrderBy(t => t.DtPrazo)
-                    .Select(t => new TarefaDto
-                    {
-                        Cd = t.CdTarefa,
-                        Nome = t.NmTarefa,
-                        Descricao = t.DsTarefa,
-                        DataPrazo = t.DtPrazo,
-                        DataConclusao = t.DtConclusao,
-                        DataCriacao = t.DtCriacao,
-                        Prioridade = t.CdPrioridadeNavigation != null
-                            ? new PrioridadeDto
-                            {
-                                Cd = t.CdPrioridadeNavigation.CdPrioridade,
-                                Nome = t.CdPrioridadeNavigation.NmPrioridade
-                            }
-                            : null,
-                        Usuario = new UsuarioResumoDto
-                        {
-                            Cd = t.CdUsuarioNavigation.CdUsuario,
-                            Nome = t.CdUsuarioNavigation.NmUsuario
-                        },
-                        UsuarioProprietario = t.CdUsuarioProprietarioNavigation != null
-                            ? new UsuarioResumoDto
-                            {
-                                Cd = t.CdUsuarioProprietarioNavigation.CdUsuario,
-                                Nome = t.CdUsuarioProprietarioNavigation.NmUsuario
-                            }
-                            : null,
-                        Tags = t.CdTags.Select(tag => new TagDto
-                        {
-                            Cd = tag.CdTag,
-                            Nome = tag.NmTag
-                        }).ToList()
-                    })
-                    .ToListAsync();
-
-                return SuccessResponse<IEnumerable<TarefaDto>>(
-                    tarefas,
-                    $"Encontradas {tarefas.Count} tarefas pendentes");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefasPendentes));
-            }
         }
+        #endregion
 
+
+        #region GetTarefa por código
         /// <summary>
         /// tarefa por codigo
         /// </summary>
         [HttpGet("{Codigo:int}")]
-        public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int cdUsuario)
         {
             try
             {
@@ -217,7 +145,7 @@ namespace RabbitaskWebAPI.Controllers
                 var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
 
                 var tarefa = await _context.Tarefas
-                    .Where(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario))
+                    .Where(t => t.CdTarefa == cdUsuario && managedUserIds.Contains(t.CdUsuario))
                     .Include(t => t.CdTags)
                     .Include(t => t.CdPrioridadeNavigation)
                     .Include(t => t.CdUsuarioNavigation)
@@ -270,9 +198,12 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<TarefaDto>(ex, nameof(GetTarefa));
             }
         }
+        #endregion
 
+
+        #region CriarTarefa
         /// <summary>
-        /// cria uam nova tarefa
+        /// cria uma nova tarefa
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa(
@@ -302,10 +233,20 @@ namespace RabbitaskWebAPI.Controllers
 
                 using var transaction = await _context.Database.BeginTransactionAsync();
 
+                var ultimoCdTarefaUsuario = await _context.Tarefas
+                    .Where(t => t.CdUsuario == dto.CdUsuario)
+                    .OrderByDescending(t => t.CdTarefa)
+                    .Select(t => t.CdTarefa)
+                    .FirstOrDefaultAsync();
+
+                var proximoCdTarefaUsuario = ultimoCdTarefaUsuario + 1;
+
+
                 try
                 {
                     var novaTarefa = new Tarefa
                     {
+                        CdTarefa = proximoCdTarefaUsuario,
                         NmTarefa = dto.Nome.Trim(),
                         DsTarefa = !string.IsNullOrWhiteSpace(dto.Descricao)
                             ? dto.Descricao.Trim()
@@ -322,7 +263,7 @@ namespace RabbitaskWebAPI.Controllers
 
                     if (dto.TagCds?.Any() == true)
                     {
-                        await AssociarTagsATarefa(novaTarefa.CdTarefa, dto.TagCds);
+                        await AssociarTagsATarefa(novaTarefa.CdTarefa, dto.CdUsuario, dto.TagCds);
                     }
 
                     await transaction.CommitAsync();
@@ -338,10 +279,7 @@ namespace RabbitaskWebAPI.Controllers
                         DataCriacao = novaTarefa.DtCriacao
                     };
 
-                    return CreatedAtAction(
-                        nameof(GetTarefa),
-                        new { id = novaTarefa.CdTarefa },
-                        ApiResponse<TarefaCriadaDto>.CreateSuccess(resultado, "Tarefa criada com sucesso"));
+                    return ApiResponse<TarefaCriadaDto>.CreateSuccess(resultado, "Tarefa criada com sucesso");
                 }
                 catch
                 {
@@ -354,13 +292,15 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<TarefaCriadaDto>(ex, nameof(CriarTarefa));
             }
         }
+        #endregion
 
+        #region AtualizarTarefa
         /// <summary>
         /// atualiza a tarefa
         /// </summary>
         [HttpPut("{Codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> AtualizarTarefa(
-            int pCodigo,
+            int cdUsuario,
             [FromBody] TarefaUpdateDto dto)
         {
             try
@@ -369,7 +309,7 @@ namespace RabbitaskWebAPI.Controllers
                 var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && managedUserIds.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -402,7 +342,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} atualizada pelo usuário {UsuarioId}",
-                    pCodigo, currentUserId);
+                    cdUsuario, currentUserId);
 
                 return SuccessResponse("Tarefa atualizada com sucesso");
             }
@@ -411,12 +351,14 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(AtualizarTarefa));
             }
         }
+        #endregion
 
+        #region DeletarTarefa
         /// <summary>
         /// deleta a tarefa
         /// </summary>
         [HttpDelete("{Codigo:int}")]
-        public async Task<ActionResult<ApiResponse<object>>> DeletarTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> DeletarTarefa(int cdUsuario)
         {
             try
             {
@@ -424,7 +366,7 @@ namespace RabbitaskWebAPI.Controllers
                 var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && cdUsuariosGeridos.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdUsuariosGeridos.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -436,7 +378,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {CdTarefa} deletada pelo usuário {CdUsuario}",
-                    pCodigo, cdUsuarioAtual);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa deletada com sucesso");
             }
@@ -445,12 +387,14 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(DeletarTarefa));
             }
         }
+        #endregion
 
+        #region ConcluirTarefa
         /// <summary>
         /// marca como completo
         /// </summary>
         [HttpPatch("{Codigo:int}/concluir")]
-        public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int cdUsuario)
         {
             try
             {
@@ -458,7 +402,7 @@ namespace RabbitaskWebAPI.Controllers
                 var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && cdUsuariosGeridos.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdUsuariosGeridos.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -475,7 +419,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} marcada como concluída pelo usuário {UsuarioId}",
-                    pCodigo, cdUsuarioAtual);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa marcada como concluída");
             }
@@ -483,21 +427,24 @@ namespace RabbitaskWebAPI.Controllers
             {
                 return HandleException<object>(ex, nameof(ConcluirTarefa));
             }
+        
         }
+        #endregion
 
+        #region ReabrirTarefa
         /// <summary>
         /// reabre a tarefa
         /// </summary>
         [HttpPatch("{Codigo:int}/reabrir")]
-        public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int pCodigo)
+        public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int cdUsuario)
         {
             try
             {
-                var currentUserId = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
 
                 var tarefa = await _context.Tarefas
-                    .FirstOrDefaultAsync(t => t.CdTarefa == pCodigo && managedUserIds.Contains(t.CdUsuario));
+                    .FirstOrDefaultAsync(t => t.CdTarefa == cdUsuario && cdsUsuariosGerenciados.Contains(t.CdUsuario));
 
                 if (tarefa == null)
                 {
@@ -514,7 +461,7 @@ namespace RabbitaskWebAPI.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Tarefa {TarefaId} reaberta pelo usuário {UsuarioId}",
-                    pCodigo, currentUserId);
+                    cdUsuario, cdUsuarioAtual);
 
                 return SuccessResponse("Tarefa reaberta com sucesso");
             }
@@ -523,6 +470,7 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<object>(ex, nameof(ReabrirTarefa));
             }
         }
+        #endregion
 
         #region Métodos privados de abstração >:D
 
@@ -566,7 +514,7 @@ namespace RabbitaskWebAPI.Controllers
         /// <summary>
         /// nome meio auto explicativo...
         /// </summary>
-        private async Task AssociarTagsATarefa(int tarefaId, IEnumerable<int> tagCds)
+        private async Task AssociarTagsATarefa(int cdTarefa, int cdUsuario, IEnumerable<int> tagCds)
         {
             var tags = await _context.Tags
                 .Where(t => tagCds.Contains(t.CdTag))
@@ -574,7 +522,7 @@ namespace RabbitaskWebAPI.Controllers
 
             var tarefa = await _context.Tarefas
                 .Include(t => t.CdTags)
-                .FirstAsync(t => t.CdTarefa == tarefaId);
+                .FirstAsync(t => t.CdTarefa == cdTarefa);
 
             foreach (var tag in tags)
             {
