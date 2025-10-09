@@ -129,7 +129,7 @@ namespace RabbitaskWebAPI.Controllers
             {
                 return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefas));
             }
-        }
+        }   
 
         /// <summary>
         /// pega as tarefas pendentes
