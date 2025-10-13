@@ -30,6 +30,10 @@ namespace RabbitaskWebAPI.Controllers
 
         #region GET - Listar / Obter tarefas
 
+        /// <summary>
+        /// Retorna uma lista paginada de tarefas do usuário especificado ou do usuário atual.
+        /// Permite filtro por prioridade e status de conclusão.
+        /// </summary>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
             [FromQuery] int? cdUsuario = null,
@@ -73,6 +77,9 @@ namespace RabbitaskWebAPI.Controllers
             }
         }
 
+        /// <summary>
+        /// Retorna os detalhes de uma tarefa específica pelo código e usuário.
+        /// </summary>
         [HttpGet("{codigo:int}")]
         public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int codigo, [FromQuery] int? cdUsuario = null)
         {
@@ -105,6 +112,9 @@ namespace RabbitaskWebAPI.Controllers
 
         #region POST - Criar tarefa
 
+        /// <summary>
+        /// Cria uma nova tarefa para o usuário especificado.
+        /// </summary>
         [HttpPost]
         public async Task<ActionResult<ApiResponse<TarefaCriadaDto>>> CriarTarefa([FromBody] TarefaCreateDto dto)
         {
@@ -165,6 +175,9 @@ namespace RabbitaskWebAPI.Controllers
 
         #region PUT / DELETE / PATCH
 
+        /// <summary>
+        /// Atualiza os dados de uma tarefa existente pelo código e usuário.
+        /// </summary>
         [HttpPut("{codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> AtualizarTarefa(int codigo, [FromBody] TarefaUpdateDto dto, [FromQuery] int? cdUsuario = null)
         {
@@ -203,6 +216,9 @@ namespace RabbitaskWebAPI.Controllers
             }
         }
 
+        /// <summary>
+        /// Exclui uma tarefa existente pelo código e usuário.
+        /// </summary>
         [HttpDelete("{codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> DeletarTarefa(int codigo, [FromQuery] int? cdUsuario = null)
         {
@@ -223,6 +239,9 @@ namespace RabbitaskWebAPI.Controllers
             }
         }
 
+        /// <summary>
+        /// Marca uma tarefa como concluída.
+        /// </summary>
         [HttpPatch("{codigo:int}/concluir")]
         public async Task<ActionResult<ApiResponse<object>>> ConcluirTarefa(int codigo, [FromQuery] int? cdUsuario = null)
         {
@@ -246,6 +265,9 @@ namespace RabbitaskWebAPI.Controllers
             }
         }
 
+        /// <summary>
+        /// Reabre uma tarefa previamente concluída.
+        /// </summary>
         [HttpPatch("{codigo:int}/reabrir")]
         public async Task<ActionResult<ApiResponse<object>>> ReabrirTarefa(int codigo, [FromQuery] int? cdUsuario = null)
         {
