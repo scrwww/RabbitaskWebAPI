@@ -24,7 +24,7 @@ namespace RabbitaskWebAPI.DTOs.Tarefa
 
         public DateTime? DataPrazo { get; set; }
 
-        public List<int>? TagCds { get; set; }
+        public List<string>? TagNomes { get; set; }
     }
 
     /// <summary>
@@ -41,6 +41,8 @@ namespace RabbitaskWebAPI.DTOs.Tarefa
         public int? CdPrioridade { get; set; }
 
         public DateTime? DataPrazo { get; set; }
+
+        public List<int>? TagCds { get; set; }
     }
 
     /// <summary>
