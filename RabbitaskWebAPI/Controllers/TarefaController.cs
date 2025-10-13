@@ -40,15 +40,15 @@ namespace RabbitaskWebAPI.Controllers
         {
             try
             {
-                var currentUserId = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
-                var targetUserId = cdUsuario ?? currentUserId;
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+                var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
 
-                if (!managedUserIds.Contains(targetUserId))
+                if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))
                     return ErrorResponse<IEnumerable<TarefaDto>>(403, "Você não tem permissão para acessar tarefas deste usuário");
 
                 var query = BuildTarefaQuery()
-                    .Where(t => t.CdUsuario == targetUserId);
+                    .Where(t => t.CdUsuario == cdUsuarioAlvo);
 
                 query = ApplyFilters(query, cdPrioridade, concluidas);
 
@@ -78,15 +78,15 @@ namespace RabbitaskWebAPI.Controllers
         {
             try
             {
-                var currentUserId = _authService.GetCurrentUserId();
-                var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
-                var targetUserId = cdUsuario ?? currentUserId;
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+                var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
 
-                if (!managedUserIds.Contains(targetUserId))
+                if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))
                     return ErrorResponse<TarefaDto>(403, "Você não tem permissão para acessar tarefas deste usuário");
 
                 var tarefa = await BuildTarefaQuery()
-                    .Where(t => t.CdTarefa == codigo && t.CdUsuario == targetUserId)
+                    .Where(t => t.CdTarefa == codigo && t.CdUsuario == cdUsuarioAlvo)
                     .Select(t => MapToTarefaDto(t))
                     .FirstOrDefaultAsync();
 
@@ -116,9 +116,9 @@ namespace RabbitaskWebAPI.Controllers
                     return ErrorResponse<TarefaCriadaDto>(400, "Dados inválidos", errors);
                 }
 
-                var currentUserId = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
 
-                if (!await _authService.CanManageUserAsync(currentUserId, dto.CdUsuario))
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, dto.CdUsuario))
                     return ErrorResponse<TarefaCriadaDto>(403, "Você não tem permissão para criar tarefas para este usuário");
 
                 await ValidarDependenciasTarefa(dto);
@@ -135,7 +135,7 @@ namespace RabbitaskWebAPI.Controllers
                     CdPrioridade = dto.CdPrioridade,
                     DtPrazo = dto.DataPrazo,
                     CdUsuario = dto.CdUsuario,
-                    CdUsuarioProprietario = currentUserId,
+                    CdUsuarioProprietario = cdUsuarioAtual,
                     DtCriacao = DateTime.Now
                 };
 
@@ -318,16 +318,16 @@ namespace RabbitaskWebAPI.Controllers
 
         private async Task<Tarefa?> ObterTarefaComPermissao(int codigoTarefa, int? cdUsuario = null)
         {
-            var currentUserId = _authService.GetCurrentUserId();
-            var managedUserIds = await _authService.GetManagedUserIdsAsync(currentUserId);
-            var targetUserId = cdUsuario ?? currentUserId;
+            var cdUsuarioAtual = _authService.GetCurrentUserId();
+            var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+            var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
 
-            if (!managedUserIds.Contains(targetUserId))
+            if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))
                 return null;
 
             return await _context.Tarefas
                 .Include(t => t.CdTags)
-                .FirstOrDefaultAsync(t => t.CdTarefa == codigoTarefa && t.CdUsuario == targetUserId);
+                .FirstOrDefaultAsync(t => t.CdTarefa == codigoTarefa && t.CdUsuario == cdUsuarioAlvo);
         }
 
         private async Task<int> ObterProximoCodigoTarefa(int cdUsuario)

@@ -98,15 +98,15 @@ namespace RabbitaskWebAPI.Controllers
         /// <summary>
         /// Pega o usuário por cd (se tiver permissão)
         /// </summary>
-        [HttpGet("{Codigo:int}")]
-        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetUsuario(int cdUsuario)
+        [HttpGet("{codigo:int}")]
+        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetUsuario(int codigo)
         {
             try
             {
                 var cdUsuarioAtual = _authService.GetCurrentUserId();
 
                 // CHECAGEM MAROTA DE PERMISSÃO
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, cdUsuario))
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
                 {
                     return ErrorResponse<UsuarioDto>(403,
                         "Você não tem permissão para acessar este usuário");
@@ -114,7 +114,7 @@ namespace RabbitaskWebAPI.Controllers
 
                 var usuario = await _context.Usuarios
                     .Include(u => u.CdTipoUsuarioNavigation)
-                    .Where(u => u.CdUsuario == cdUsuario)
+                    .Where(u => u.CdUsuario == codigo)
                     .Select(u => new UsuarioDto
                     {
                         Cd = u.CdUsuario,
@@ -207,22 +207,22 @@ namespace RabbitaskWebAPI.Controllers
         /// <summary>
         /// Atualiza os dados do usuario - esse é pro agente
         /// </summary>
-        [HttpPut("{Codigo:int}")]
+        [HttpPut("{codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> UpdateUsuario(
-            int cdUsuario,
+            int codigo,
             [FromBody] UsuarioUpdateDto dto)
         {
             try
             {
                 var cdUsuarioAtual = _authService.GetCurrentUserId();
 
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, cdUsuario))
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
                 {
                     return ErrorResponse<object>(403,
                         "Você não tem permissão para atualizar este usuário");
                 }
 
-                var usuario = await _context.Usuarios.FindAsync(cdUsuario);
+                var usuario = await _context.Usuarios.FindAsync(codigo);
                 if (usuario == null)
                 {
                     return ErrorResponse<object>(404, "Usuário não encontrado");
@@ -234,7 +234,7 @@ namespace RabbitaskWebAPI.Controllers
                 if (!string.IsNullOrWhiteSpace(dto.Email))
                 {
                     var emailExists = await _context.Usuarios
-                        .AnyAsync(u => u.NmEmail == dto.Email && u.CdUsuario != cdUsuario);
+                        .AnyAsync(u => u.NmEmail == dto.Email && u.CdUsuario != codigo);
 
                     if (emailExists)
                     {
@@ -251,7 +251,7 @@ namespace RabbitaskWebAPI.Controllers
 
                 _logger.LogInformation(
                     "Usuário {ManagerId} atualizou o perfil do usuário {UserId}",
-                    cdUsuarioAtual, cdUsuario);
+                    cdUsuarioAtual, codigo);
 
                 return SuccessResponse("Usuário atualizado com sucesso");
             }
@@ -264,21 +264,21 @@ namespace RabbitaskWebAPI.Controllers
         /// <summary>
         /// Pega as estatísticas do usuário (task counts, taxa de cumprimento, etc.)
         /// </summary>
-        [HttpGet("{Codigo:int}/estatisticas")]
-        public async Task<ActionResult<ApiResponse<UsuarioEstatisticasDto>>> GetEstatisticas(int cdUsuario)
+        [HttpGet("{codigo:int}/estatisticas")]
+        public async Task<ActionResult<ApiResponse<UsuarioEstatisticasDto>>> GetEstatisticas(int codigo)
         {
             try
             {
                 var cdUsuarioAtual = _authService.GetCurrentUserId();
 
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, cdUsuario))
+                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
                 {
                     return ErrorResponse<UsuarioEstatisticasDto>(403,
                         "Você não tem permissão para acessar as estatísticas deste usuário");
                 }
 
                 var tarefas = await _context.Tarefas
-                    .Where(t => t.CdUsuario == cdUsuario)
+                    .Where(t => t.CdUsuario == codigo)
                     .ToListAsync();
 
                 var totalTarefas = tarefas.Count;
