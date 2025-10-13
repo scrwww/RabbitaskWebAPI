@@ -77,8 +77,8 @@ namespace RabbitaskWebAPI.Controllers
             return statusCode switch
             {
                 400 => BadRequest(response),
-                401 => Unauthorized(response),
-                403 => Forbid(response.ToString()),
+                401 => StatusCode(401, response),
+                403 => StatusCode(403, response),
                 404 => NotFound(response),
                 409 => Conflict(response),
                 _ => StatusCode(statusCode, response)
