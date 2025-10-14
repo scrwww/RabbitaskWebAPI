@@ -1,4 +1,13 @@
-﻿.swagger-ui .topbar-wrapper .link {
+﻿:root {
+    --verde: #A5D692;
+    --verde-dessaturado: #c7d6c1;
+    --azul: #4A8BBA;
+    --azul-claro: #BDE2F1;
+    --vermelho: #C84852;
+    --vermelho-claro: E9B6BA;
+}
+
+.swagger-ui .topbar-wrapper .link {
     background: url('/images/logoRabbitask.webp') no-repeat;
     background-size: contain;
     height: 100px;
@@ -20,4 +29,12 @@ body {
 .swagger-ui .info h1 {
     font-family: Arial, sans-serif;
     color: #2980b9;
+}
+
+.swagger-ui .opblock.opblock-post .opblock-summary {
+    border-color: var(--verde);
+}
+
+.swagger-ui .opblock.opblock-post .opblock-summary-method {
+    background: var(--verde)
 }
