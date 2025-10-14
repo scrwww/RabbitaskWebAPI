@@ -96,6 +96,8 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
+    
+
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     c.IncludeXmlComments(xmlPath);
@@ -124,7 +126,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseSwagger();
-app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "RabbitaskWebAPI v1"));
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "RabbitaskWebAPI v1");
+    c.InjectStylesheet("/swagger-ui/custom.css");
+}
+);
+app.UseStaticFiles();
 
 app.MapControllers();
 

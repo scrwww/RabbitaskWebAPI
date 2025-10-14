@@ -1,0 +1,23 @@
+﻿.swagger-ui .topbar-wrapper .link {
+    background: url('/images/logoRabbitask.webp') no-repeat;
+    background-size: contain;
+    height: 100px;
+}
+
+    .swagger-ui .topbar-wrapper .link img {
+        display: none;
+    }
+
+
+body {
+    background-color: #FBF7EF;
+}
+
+.swagger-ui .topbar {
+    background-color: #4A8BBA;
+}
+
+.swagger-ui .info h1 {
+    font-family: Arial, sans-serif;
+    color: #2980b9;
+}
