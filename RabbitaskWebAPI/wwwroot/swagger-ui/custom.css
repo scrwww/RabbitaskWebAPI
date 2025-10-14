@@ -38,3 +38,19 @@ body {
 .swagger-ui .opblock.opblock-post .opblock-summary-method {
     background: var(--verde)
 }
+
+.swagger-ui .opblock.opblock-get .opblock-summary {
+    border-color: var(--azul);
+}
+
+.swagger-ui .opblock.opblock-get .opblock-summary-method {
+    background: var(--azul)
+}
+
+.swagger-ui .opblock.opblock-delete.opblock-summary {
+    border-color: var(--vermelho);
+}
+
+.swagger-ui .opblock.opblock-delete .opblock-summary-method {
+    background: var(--vermelho)
+}
