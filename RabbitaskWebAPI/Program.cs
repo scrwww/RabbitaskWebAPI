@@ -130,8 +130,6 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "RabbitaskWebAPI v1");
     c.InjectStylesheet("/swagger-ui/custom.css");
-    c.InjectJavascript("/swagger-ui/custom-logo.js");
-
 }
 );
 app.UseStaticFiles();

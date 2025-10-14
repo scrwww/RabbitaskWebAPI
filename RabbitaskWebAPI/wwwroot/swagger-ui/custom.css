@@ -1,4 +1,15 @@
-﻿body {
+﻿.swagger-ui .topbar-wrapper .link {
+    background: url('/images/logoRabbitask.webp') no-repeat;
+    background-size: contain;
+    height: 100px;
+}
+
+    .swagger-ui .topbar-wrapper .link img {
+        display: none;
+    }
+
+
+body {
     background-color: #FBF7EF;
 }
 
