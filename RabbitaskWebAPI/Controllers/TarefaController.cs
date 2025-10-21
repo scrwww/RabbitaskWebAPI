@@ -32,10 +32,11 @@ namespace RabbitaskWebAPI.Controllers
 
         /// <summary>
         /// Retorna uma lista paginada de tarefas do usuário especificado ou do usuário atual.
-        /// Permite filtro por prioridade e status de conclusão.
+        /// Permite filtro por código, prioridade e status de conclusão.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
+            [FromQuery] int? Codigo = null,
             [FromQuery] int? cdUsuario = null,
             [FromQuery] int? cdPrioridade = null,
             [FromQuery] bool? concluidas = null,
@@ -54,7 +55,7 @@ namespace RabbitaskWebAPI.Controllers
                 var query = BuildTarefaQuery()
                     .Where(t => t.CdUsuario == cdUsuarioAlvo);
 
-                query = ApplyFilters(query, cdPrioridade, concluidas);
+                query = ApplyFilters(query, cdPrioridade, concluidas, Codigo);
 
                 var totalItems = await query.CountAsync();
 
@@ -74,37 +75,6 @@ namespace RabbitaskWebAPI.Controllers
             catch (Exception ex)
             {
                 return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefas));
-            }
-        }
-
-        /// <summary>
-        /// Retorna os detalhes de uma tarefa específica pelo código e usuário.
-        /// </summary>
-        [HttpGet("{codigo:int}")]
-        public async Task<ActionResult<ApiResponse<TarefaDto>>> GetTarefa(int codigo, [FromQuery] int? cdUsuario = null)
-        {
-            try
-            {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
-                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
-                var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
-
-                if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))
-                    return ErrorResponse<TarefaDto>(403, "Você não tem permissão para acessar tarefas deste usuário");
-
-                var tarefa = await BuildTarefaQuery()
-                    .Where(t => t.CdTarefa == codigo && t.CdUsuario == cdUsuarioAlvo)
-                    .Select(t => MapToTarefaDto(t))
-                    .FirstOrDefaultAsync();
-
-                if (tarefa == null)
-                    return ErrorResponse<TarefaDto>(404, "Tarefa não encontrada ou você não tem permissão para acessá-la");
-
-                return SuccessResponse(tarefa, "Tarefa encontrada com sucesso");
-            }
-            catch (Exception ex)
-            {
-                return HandleException<TarefaDto>(ex, nameof(GetTarefa));
             }
         }
 
@@ -203,8 +173,8 @@ namespace RabbitaskWebAPI.Controllers
                 if (dto.DataPrazo.HasValue)
                     tarefa.DtPrazo = dto.DataPrazo;
 
-                if (dto.TagCds != null)
-                    await AtualizarTagsDaTarefa(tarefa, dto.TagCds);
+                if (dto.TagNomes?.Any() == true)
+                    await AssociarTagsPorNomeATarefa(tarefa, dto.TagNomes);
 
                 await _context.SaveChangesAsync();
 
@@ -304,15 +274,19 @@ namespace RabbitaskWebAPI.Controllers
                 .Include(t => t.CdUsuarioProprietarioNavigation);
         }
 
-        private IQueryable<Tarefa> ApplyFilters(IQueryable<Tarefa> query, int? cdPrioridade, bool? concluidas)
+        private IQueryable<Tarefa> ApplyFilters(IQueryable<Tarefa> query, int? cdPrioridade, bool? concluidas, int? Codigo)
         {
             if (cdPrioridade.HasValue)
                 query = query.Where(t => t.CdPrioridade == cdPrioridade.Value);
+
 
             if (concluidas.HasValue)
                 query = concluidas.Value
                     ? query.Where(t => t.DtConclusao != null)
                     : query.Where(t => t.DtConclusao == null);
+
+            if(Codigo.HasValue)
+                query = query.Where(t => t.CdTarefa == Codigo.Value);
 
             return query;
         }
