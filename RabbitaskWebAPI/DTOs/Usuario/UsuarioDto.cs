@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using RabbitaskWebAPI.DTOs.TipoUsuario;
 
 namespace RabbitaskWebAPI.DTOs.Usuario
 {
@@ -7,11 +8,26 @@ namespace RabbitaskWebAPI.DTOs.Usuario
     /// </summary>
     public class UsuarioDto
     {
+        /// <summary>
+        /// Código do usuário
+        /// </summary>
         public int Cd { get; set; }
-        public string Nome { get; set; }
-        public string Email { get; set; }
+        /// <summary>
+        /// Nome do usuário
+        /// </summary>
+        public string? Nome { get; set; }
+        /// <summary>
+        /// Email do usuário
+        /// </summary>
+        public string? Email { get; set; }
+        /// <summary>
+        /// Telefone do usuário
+        /// </summary>
         public string? Telefone { get; set; }
-        public string? TipoUsuario { get; set; }
+        /// <summary>
+        /// Tipo do usuário
+        /// </summary>
+        public TipoUsuarioDto Tipo { get; set; }
     }
 
     /// <summary>
