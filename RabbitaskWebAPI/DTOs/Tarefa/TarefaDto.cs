@@ -61,7 +61,7 @@ namespace RabbitaskWebAPI.DTOs.Tarefa
         public PrioridadeDto? Prioridade { get; set; }
         public UsuarioResumoDto Usuario { get; set; }
         public UsuarioResumoDto? UsuarioProprietario { get; set; }
-        public List<TagDto> Tags { get; set; } = new();
+        public List<TagDto>? Tags { get; set; } = new();
 
         // Propriedades computadas
         public bool Concluida => DataConclusao.HasValue;
