@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RabbitaskWebAPI.Data;
 using RabbitaskWebAPI.DTOs.Common;
+using RabbitaskWebAPI.DTOs.TipoUsuario;
 using RabbitaskWebAPI.DTOs.Usuario;
 using RabbitaskWebAPI.Models;
 
@@ -43,9 +44,7 @@ namespace RabbitaskWebAPI.Controllers
                         Nome = u.NmUsuario,
                         Email = u.NmEmail,
                         Telefone = u.CdTelefone,
-                        TipoUsuario = u.CdTipoUsuarioNavigation != null
-                            ? u.CdTipoUsuarioNavigation.NmTipoUsuario
-                            : null
+                        Tipo = new TipoUsuarioDto { Cd = u.CdTipoUsuarioNavigation.CdTipoUsuario, Nome = u.CdTipoUsuarioNavigation.NmTipoUsuario }
                     })
                     .FirstOrDefaultAsync();
 
@@ -121,9 +120,7 @@ namespace RabbitaskWebAPI.Controllers
                         Nome = u.NmUsuario,
                         Email = u.NmEmail,
                         Telefone = u.CdTelefone,
-                        TipoUsuario = u.CdTipoUsuarioNavigation != null
-                            ? u.CdTipoUsuarioNavigation.NmTipoUsuario
-                            : null
+                        Tipo = new TipoUsuarioDto { Cd = u.CdTipoUsuarioNavigation.CdTipoUsuario, Nome = u.CdTipoUsuarioNavigation.NmTipoUsuario }
                     })
                     .FirstOrDefaultAsync();
 

@@ -36,7 +36,7 @@ namespace RabbitaskWebAPI.Controllers
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
-            [FromQuery] int? Codigo = null,
+            [FromQuery] int? codigo = null,
             [FromQuery] int? cdUsuario = null,
             [FromQuery] int? cdPrioridade = null,
             [FromQuery] bool? concluidas = null,
@@ -55,7 +55,7 @@ namespace RabbitaskWebAPI.Controllers
                 var query = BuildTarefaQuery()
                     .Where(t => t.CdUsuario == cdUsuarioAlvo);
 
-                query = ApplyFilters(query, cdPrioridade, concluidas, Codigo);
+                query = ApplyFilters(query, cdPrioridade, concluidas, codigo);
 
                 var totalItems = await query.CountAsync();
 
