@@ -6,6 +6,7 @@ using RabbitaskWebAPI.DTOs.Common;
 using RabbitaskWebAPI.DTOs.TipoUsuario;
 using RabbitaskWebAPI.DTOs.Usuario;
 using RabbitaskWebAPI.Models;
+using RabbitaskWebAPI.Services;
 
 namespace RabbitaskWebAPI.Controllers
 {
@@ -15,12 +16,15 @@ namespace RabbitaskWebAPI.Controllers
     {
         private readonly RabbitaskContext _context;
         private readonly Services.IUserAuthorizationService _authService;
+        private readonly Services.ICodigoConexaoService _conexaoService;
         public UsuarioController(
             RabbitaskContext context,
             Services.IUserAuthorizationService authService,
+            Services.ICodigoConexaoService codigoConexaoService,
             ILogger<UsuarioController> logger)
             : base(logger)
         {
+            _conexaoService = codigoConexaoService;
             _context = context;
             _authService = authService;
         }
@@ -185,7 +189,7 @@ namespace RabbitaskWebAPI.Controllers
 
                 if (!string.IsNullOrWhiteSpace(dto.NovaSenha))
                 {
-                   
+
                     usuario.NmSenha = HasherSenha.Hash(dto.NovaSenha);
                 }
 
@@ -344,70 +348,74 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusUsuarios));
             }
         }
+        /// <summary>
+        /// Usuário padrão gera um código temporário de conexão.
+        /// </summary>
+        [HttpPost("gerar-codigo")]
+        public async Task<IActionResult> GerarCodigo()
+        {
+            int userId = _authService.GetCurrentUserId();
+
+            if (await _authService.IsAgenteAsync(userId))
+                return Forbid("Agentes não podem gerar códigos.");
+
+            var codigo = _conexaoService.CriarCodigoConexao(userId);
+
+            return Ok(new
+            {
+                codigo = codigo.Codigo,
+                expiraEm = codigo.DataExpiracao
+            });
+        }
 
         /// <summary>
-        /// Conecta um agente a um usuário comum
+        /// Usuário agente usa um código válido para criar uma conexão com um usuário padrão.
         /// </summary>
-        [HttpPost("conectar")]
-        public async Task<ActionResult<ApiResponse<object>>> ConectarUsuarios(
-            [FromBody] ConectarUsuariosDto dto)
+        [HttpPost("conectar/{codigo}")]
+        public async Task<IActionResult> ConectarPorCodigo(string codigo)
         {
-            try
+            int agenteId = _authService.GetCurrentUserId();
+
+            if (!await _authService.IsAgenteAsync(agenteId))
+                return Forbid("Somente agentes podem usar códigos de conexão.");
+
+            var usuario = _conexaoService.ValidarCodigo(codigo);
+            if (usuario == null)
+                return BadRequest("Código inválido ou expirado.");
+
+            bool jaExiste = await _context.ConexaoUsuarios.AnyAsync(c =>
+                c.CdUsuarioAgente == agenteId && c.CdUsuario == usuario.CdUsuario);
+
+            if (jaExiste)
+                return Conflict("Este usuário já está conectado a você.");
+
+            var conexao = new ConexaoUsuario
             {
-                var agente = await _context.Usuarios
-                    .FirstOrDefaultAsync(u => u.CdUsuario == dto.CdAgente && u.CdTipoUsuario == 2);
+                CdUsuarioAgente = agenteId,
+                CdUsuario = usuario.CdUsuario
+            };
 
-                if (agente == null)
-                {
-                    return ErrorResponse<object>(404, "Agente não encontrado");
-                }
+            _context.ConexaoUsuarios.Add(conexao);
+            await _context.SaveChangesAsync();
 
-                var usuario = await _context.Usuarios
-                    .FirstOrDefaultAsync(u => u.CdUsuario == dto.CdUsuario && u.CdTipoUsuario == 1);
+            _logger.LogInformation("Agente {AgenteId} conectou com usuário {UsuarioId}", agenteId, usuario.CdUsuario);
 
-                if (usuario == null)
-                {
-                    return ErrorResponse<object>(404, "Usuário não encontrado");
-                }
-
-                // checar se a conexão já existe... - v -
-                var connectionExists = await _context.ConexaoUsuarios
-                    .AnyAsync(c => c.CdUsuarioAgente == dto.CdAgente && c.CdUsuario == dto.CdUsuario);
-
-                if (connectionExists)
-                {
-                    return ErrorResponse<object>(409, "Conexão já existe");
-                }
-
-                // CONNECT THEM HEHEHE
-                var conexao = new ConexaoUsuario
-                {
-                    CdUsuarioAgente = dto.CdAgente,
-                    CdUsuario = dto.CdUsuario
-                };
-
-                _context.ConexaoUsuarios.Add(conexao);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation(
-                    "Agente {CdUsuarioAgente} conectado ao usuário {CdUsuario}",
-                    dto.CdAgente, dto.CdUsuario);
-
-                return SuccessResponse("Usuários conectados com sucesso");
-            }
-            catch (Exception ex)
+            return Ok(new
             {
-                return HandleException<object>(ex, nameof(ConectarUsuarios));
-            }
+                sucesso = true,
+                usuarioConectado = usuario.NmUsuario,
+                usuarioId = usuario.CdUsuario
+            });
         }
+
 
         /// <summary>
         /// Disconecta um Agente de um Usuario Comum
         /// </summary>
         [HttpDelete("desconectar")]
         public async Task<ActionResult<ApiResponse<object>>> DesconectarUsuarios(
-            [FromQuery] int cdAgente,
-            [FromQuery] int cdUsuario)
+                [FromQuery] int cdAgente,
+                [FromQuery] int cdUsuario)
         {
             try
             {

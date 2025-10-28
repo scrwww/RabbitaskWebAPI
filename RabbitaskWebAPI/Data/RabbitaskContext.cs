@@ -27,14 +27,10 @@ namespace RabbitaskWebAPI.Data
         public virtual DbSet<Topico> Topicos { get; set; } = null!;
         public virtual DbSet<Usuario> Usuarios { get; set; } = null!;
         public virtual DbSet<ConexaoUsuario> ConexaoUsuarios { get; set; } = null!;
+        public virtual DbSet<CodigoConexao> CodigosConexao { get; set; } = null!; // ADICIONADO
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            if (!optionsBuilder.IsConfigured)
-            {
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
-                optionsBuilder.UseMySQL("Server=localhost;Port=3306;Database=rabbitask;Uid=root;Pwd=root;");
-            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -190,6 +186,58 @@ namespace RabbitaskWebAPI.Data
 
                 entity.HasIndex(e => e.CdUsuarioAgente)
                     .HasDatabaseName("fk_conexao_usuario_agente_usuario");
+            });
+
+            // ====== CONFIGURAÇÃO DA NOVA ENTIDADE CodigoConexao ======
+            modelBuilder.Entity<CodigoConexao>(entity =>
+            {
+                entity.HasKey(e => e.Id)
+                    .HasName("PRIMARY");
+
+                entity.ToTable("codigo_conexao");
+
+                entity.Property(e => e.Id)
+                    .HasColumnName("id")
+                    .ValueGeneratedOnAdd();
+
+                entity.Property(e => e.Codigo)
+                    .HasColumnName("codigo")
+                    .HasMaxLength(8)
+                    .IsRequired();
+
+                entity.Property(e => e.CdUsuario)
+                    .HasColumnName("cd_usuario")
+                    .IsRequired();
+
+                entity.Property(e => e.DataCriacao)
+                    .HasColumnName("data_criacao")
+                    .HasColumnType("datetime")
+                    .IsRequired();
+
+                entity.Property(e => e.DataExpiracao)
+                    .HasColumnName("data_expiracao")
+                    .HasColumnType("datetime")
+                    .IsRequired();
+
+                entity.Property(e => e.Usado)
+                    .HasColumnName("usado")
+                    .HasDefaultValue(false)
+                    .IsRequired();
+
+                // Índice para busca rápida por código
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("idx_codigo_conexao_codigo");
+
+                // Índice para busca por usuário
+                entity.HasIndex(e => e.CdUsuario)
+                    .HasDatabaseName("idx_codigo_conexao_usuario");
+
+                // Foreign key para Usuario
+                entity.HasOne(d => d.Usuario)
+                    .WithMany()
+                    .HasForeignKey(d => d.CdUsuario)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_codigo_conexao_usuario");
             });
 
             OnModelCreatingPartial(modelBuilder);

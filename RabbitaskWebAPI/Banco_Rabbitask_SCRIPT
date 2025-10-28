@@ -109,24 +109,42 @@ Create Table anexo
     constraint fk_anexo_tarefa foreign key (cd_usuario, cd_tarefa) references tarefa (cd_usuario, cd_tarefa)
 );
 
+CREATE TABLE codigo_conexao (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(8) NOT NULL,
+    cd_usuario INT NOT NULL,
+    data_criacao DATETIME NOT NULL,
+    data_expiracao DATETIME NOT NULL,
+    usado BOOLEAN NOT NULL DEFAULT FALSE,
+    
+    INDEX idx_codigo_conexao_codigo (codigo),
+    INDEX idx_codigo_conexao_usuario (cd_usuario),
+    
+    CONSTRAINT fk_codigo_conexao_usuario 
+        FOREIGN KEY (cd_usuario) 
+        REFERENCES usuario(cd_usuario) 
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 INSERT INTO tipo_usuario (cd_tipo_usuario,nm_tipo_usuario) values (1,"Usuário Comum");
 INSERT INTO tipo_usuario (cd_tipo_usuario,nm_tipo_usuario) values (2,"Agente");
 
 -- senha: senha123
 INSERT INTO usuario (cd_usuario,nm_usuario,nm_email,nm_senha,cd_telefone,cd_tipo_usuario) 
-VALUES (1,"João da Silva","joao.silva@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=",1199684529,1);
+VALUES (1,"João da Silva","joao.silva@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=","+551199684529",1);
 
 INSERT INTO usuario (cd_usuario,nm_usuario,nm_email,nm_senha,cd_telefone,cd_tipo_usuario) 
-VALUES (2,"Maria Santos","maria.santos@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=",1965239810,1);
+VALUES (2,"Maria Santos","maria.santos@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=","+551965239810",1);
 
 INSERT INTO usuario (cd_usuario,nm_usuario,nm_email,nm_senha,cd_telefone,cd_tipo_usuario) 
-VALUES (3,"Pedro Ferreira","pedro.ferreira@email.com", "/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=",1839789368,1);
+VALUES (3,"Pedro Ferreira","pedro.ferreira@email.com", "/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=","+551839789368",1);
 
 INSERT INTO usuario (cd_usuario,nm_usuario,nm_email,nm_senha,cd_telefone,cd_tipo_usuario) 
-VALUES (4,"Ana Oliveira","ana.oliveira@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=",1210398501,2);
+VALUES (4,"Ana Oliveira","ana.oliveira@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=","+551210398501",2);
 
 INSERT INTO usuario (cd_usuario,nm_usuario,nm_email,nm_senha,cd_telefone,cd_tipo_usuario) 
-VALUES (5,"Carlos Rodrigues","carlos.rodrigues@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=",1734987747,2);
+VALUES (5,"Carlos Rodrigues","carlos.rodrigues@email.com","/uISX1ElIaYLCKQEsEW/M2mlpQMhB3G+7aJfS/ETTF4=","+551734987747",2);
 
 INSERT INTO conexao_usuario (cd_usuario,cd_usuario_agente) values (1,4);
 INSERT INTO conexao_usuario (cd_usuario,cd_usuario_agente) values (2,4);

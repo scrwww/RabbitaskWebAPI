@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using RabbitaskWebAPI.Data;
 using RabbitaskWebAPI.Models;
+using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using PhoneNumbers;
+
 
 [ApiController]
 [Route("api/[controller]")]
@@ -57,12 +60,27 @@ public class AuthController : ControllerBase
         if (!_context.TipoUsuarios.Any(t => t.CdTipoUsuario == dto.CdTipoUsuario))
                 return Conflict("Tipo de usuário inválido");
 
+        PhoneNumberUtil numberUtil = PhoneNumberUtil.GetInstance();
+        PhoneNumber telefone = numberUtil.Parse(dto.CdTelefone, "BR");
+        if(!numberUtil.IsValidNumber(telefone))
+        {
+            return Conflict("Telefone inválido");
+        }
+
+
+        string cdTelefone = numberUtil.Format(telefone, PhoneNumberFormat.E164);
+
+        if (_context.Usuarios.Any(u => u.CdTelefone == cdTelefone))
+        {
+            return Conflict("Telefone já está em uso");
+        }
+
         var usuario = new Usuario
         {
             NmUsuario = dto.NmUsuario,
             NmEmail = dto.NmEmail,
             NmSenha = HasherSenha.Hash(dto.NmSenha),
-            CdTelefone = dto.CdTelefone,
+            CdTelefone = cdTelefone,
             CdTipoUsuario = dto.CdTipoUsuario
         };
 
@@ -76,14 +94,19 @@ public class AuthController : ControllerBase
 public class LoginDto
 {
     public string Email { get; set; }
+    public string Telefone { get; set; }
     public string Senha { get; set; }
 }
 
 public class CadastrarDto
 {
     public string NmUsuario { get; set; }
+
+    [EmailAddress]
     public string NmEmail { get; set; }
     public string NmSenha { get; set; }
+
+    [Phone]
     public string CdTelefone { get; set; }
     public int CdTipoUsuario { get; set; }
 }
