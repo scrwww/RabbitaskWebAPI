@@ -55,7 +55,6 @@ namespace RabbitaskWebAPI.Services
         /// </summary>
         public CodigoConexao CriarCodigoConexao(int cdUsuario)
         {
-            // Invalida códigos anteriores não usados deste usuário
             var codigosAntigos = _context.CodigosConexao
                 .Where(c => c.CdUsuario == cdUsuario && !c.Usado)
                 .ToList();
@@ -65,7 +64,6 @@ namespace RabbitaskWebAPI.Services
                 codigo.Usado = true;
             }
 
-            // Gera um código único
             string novoCodigo;
             do
             {
@@ -98,15 +96,14 @@ namespace RabbitaskWebAPI.Services
 
             if (codigoConexao == null)
             {
-                return null; // Código inválido ou já usado
+                return null;
             }
 
             if (codigoConexao.DataExpiracao < DateTime.Now)
             {
-                return null; // Código expirado
+                return null; 
             }
 
-            // Marca o código como usado
             codigoConexao.Usado = true;
             _context.SaveChanges();
 
@@ -118,13 +115,14 @@ namespace RabbitaskWebAPI.Services
         /// </summary>
         public void LimparCodigosExpirados()
         {
-            var dataLimite = DateTime.Now.AddHours(-24);
-            var codigosExpirados = _context.CodigosConexao
-                .Where(c => c.DataCriacao < dataLimite)
-                .ToList();
+            var expirados = _context.CodigosConexao
+                .Where(c => c.DataExpiracao < DateTime.Now).ToList();
 
-            _context.CodigosConexao.RemoveRange(codigosExpirados);
-            _context.SaveChanges();
+            if (expirados.Count > 0)
+            {
+                _context.CodigosConexao.RemoveRange(expirados);
+                _context.SaveChanges();
+            }
         }
 
         /// <summary>

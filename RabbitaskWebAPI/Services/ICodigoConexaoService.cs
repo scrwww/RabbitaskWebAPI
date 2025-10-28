@@ -8,7 +8,7 @@ namespace RabbitaskWebAPI.Services
     public interface ICodigoConexaoService
     {
         /// <summary>
-        /// Cria um novo código de conexão para um usuário.
+        /// Cria um novo código de conexão para um usuário padrão.
         /// </summary>
         /// <param name="cdUsuario">Código do usuário que vai gerar o código.</param>
         /// <returns>Instância do código de conexão criado.</returns>
@@ -22,7 +22,7 @@ namespace RabbitaskWebAPI.Services
         Usuario? ValidarCodigo(string codigo);
 
         /// <summary>
-        /// Remove do banco os códigos expirados há mais de 24 horas.
+        /// Remove os códigos expirados.
         /// </summary>
         void LimparCodigosExpirados();
 

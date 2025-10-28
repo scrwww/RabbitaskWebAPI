@@ -70,7 +70,7 @@ public class AuthController : ControllerBase
 
         string cdTelefone = numberUtil.Format(telefone, PhoneNumberFormat.E164);
 
-        if (!_context.Usuarios.Any(u => u.CdTelefone == cdTelefone))
+        if (_context.Usuarios.Any(u => u.CdTelefone == cdTelefone))
         {
             return Conflict("Telefone já está em uso");
         }
