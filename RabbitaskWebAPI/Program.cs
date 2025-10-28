@@ -19,6 +19,7 @@ builder.Services.AddDbContext<RabbitaskContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<RabbitaskWebAPI.Services.IUserAuthorizationService,
                            RabbitaskWebAPI.Services.UserAuthorizationService>();
+builder.Services.AddScoped<ICodigoConexaoService, CodigoConexaoService>();
 
 builder.Services.AddAuthorization(options =>
 {

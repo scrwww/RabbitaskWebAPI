@@ -109,6 +109,24 @@ Create Table anexo
     constraint fk_anexo_tarefa foreign key (cd_usuario, cd_tarefa) references tarefa (cd_usuario, cd_tarefa)
 );
 
+CREATE TABLE codigo_conexao (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(8) NOT NULL,
+    cd_usuario INT NOT NULL,
+    data_criacao DATETIME NOT NULL,
+    data_expiracao DATETIME NOT NULL,
+    usado BOOLEAN NOT NULL DEFAULT FALSE,
+    
+    INDEX idx_codigo_conexao_codigo (codigo),
+    INDEX idx_codigo_conexao_usuario (cd_usuario),
+    
+    CONSTRAINT fk_codigo_conexao_usuario 
+        FOREIGN KEY (cd_usuario) 
+        REFERENCES usuario(cd_usuario) 
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 INSERT INTO tipo_usuario (cd_tipo_usuario,nm_tipo_usuario) values (1,"Usuário Comum");
 INSERT INTO tipo_usuario (cd_tipo_usuario,nm_tipo_usuario) values (2,"Agente");
 
