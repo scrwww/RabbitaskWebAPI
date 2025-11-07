@@ -1,0 +1,35 @@
+version: '3.9'
+services:
+  rabbitask-mysql:
+    image: mysql:8.0
+    container_name: rabbitask-mysql
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - rabbitask-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  rabbitask-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rabbitask-api
+    depends_on:
+      rabbitask-mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "5000:80"
+    restart: unless-stopped
+
+volumes:
+  rabbitask-mysql-data:
