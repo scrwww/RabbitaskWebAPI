@@ -124,7 +124,7 @@ namespace RabbitaskWebAPI.Controllers
 
                 // Cria ou associa tags
                 if (dto.TagNomes?.Any() == true)
-                    await AssociarTagsPorNomeATarefa(novaTarefa, dto.TagNomes);
+                    await SubstituirTagsPorNomeNaTarefa(novaTarefa, dto.TagNomes);
 
                 await transaction.CommitAsync();
 
@@ -147,6 +147,7 @@ namespace RabbitaskWebAPI.Controllers
 
         /// <summary>
         /// Atualiza os dados de uma tarefa existente pelo código e usuário.
+        /// Se TagNomes for fornecido, substitui TODAS as tags existentes pelas novas.
         /// </summary>
         [HttpPut("{codigo:int}")]
         public async Task<ActionResult<ApiResponse<object>>> AtualizarTarefa(int codigo, [FromBody] TarefaUpdateDto dto, [FromQuery] int? cdUsuario = null)
@@ -173,8 +174,8 @@ namespace RabbitaskWebAPI.Controllers
                 if (dto.DataPrazo.HasValue)
                     tarefa.DtPrazo = dto.DataPrazo;
 
-                if (dto.TagNomes?.Any() == true)
-                    await AssociarTagsPorNomeATarefa(tarefa, dto.TagNomes);
+                if (dto.TagNomes != null)
+                    await SubstituirTagsPorNomeNaTarefa(tarefa, dto.TagNomes);
 
                 await _context.SaveChangesAsync();
 
@@ -279,13 +280,12 @@ namespace RabbitaskWebAPI.Controllers
             if (cdPrioridade.HasValue)
                 query = query.Where(t => t.CdPrioridade == cdPrioridade.Value);
 
-
             if (concluidas.HasValue)
                 query = concluidas.Value
                     ? query.Where(t => t.DtConclusao != null)
                     : query.Where(t => t.DtConclusao == null);
 
-            if(Codigo.HasValue)
+            if (Codigo.HasValue)
                 query = query.Where(t => t.CdTarefa == Codigo.Value);
 
             return query;
@@ -349,6 +349,56 @@ namespace RabbitaskWebAPI.Controllers
                 throw new ArgumentException("A prioridade selecionada não existe");
         }
 
+        /// <summary>
+        /// Substitui TODAS as tags da tarefa pelas novas informadas.
+        /// Remove todas as tags antigas e adiciona apenas as novas.
+        /// Se a lista estiver vazia, remove todas as tags.
+        /// </summary>
+        private async Task SubstituirTagsPorNomeNaTarefa(Tarefa tarefa, IEnumerable<string> tagNomes)
+        {
+            // 1. Remove TODAS as tags antigas da tarefa
+            tarefa.CdTags.Clear();
+
+            // 2. Se não há novas tags, apenas salva e retorna
+            if (tagNomes == null || !tagNomes.Any())
+            {
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            // 3. Adiciona as novas tags
+            foreach (var nome in tagNomes)
+            {
+                var nomeTrim = nome.Trim();
+
+                // Ignora strings vazias
+                if (string.IsNullOrWhiteSpace(nomeTrim))
+                    continue;
+
+                var nomeNormalizado = nomeTrim.ToLower();
+
+                // Procura a tag no banco (case-insensitive)
+                var tag = await _context.Tags.FirstOrDefaultAsync(t => t.NmTag.ToLower() == nomeNormalizado);
+
+                // Se a tag não existe, cria uma nova
+                if (tag == null)
+                {
+                    var novoCd = await _context.Tags.MaxAsync(t => (int?)t.CdTag) ?? 0;
+                    tag = new Tag { CdTag = novoCd + 1, NmTag = nomeTrim };
+                    _context.Tags.Add(tag);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Adiciona a tag à tarefa (evita duplicatas)
+                if (!tarefa.CdTags.Any(t => t.CdTag == tag.CdTag))
+                    tarefa.CdTags.Add(tag);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // MÉTODO OBSOLETO
+        [Obsolete("Use SubstituirTagsPorNomeNaTarefa para substituição completa das tags")]
         private async Task AssociarTagsPorNomeATarefa(Tarefa tarefa, IEnumerable<string> tagNomes)
         {
             foreach (var nome in tagNomes)
