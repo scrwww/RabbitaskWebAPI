@@ -348,6 +348,47 @@ namespace RabbitaskWebAPI.Controllers
                 return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusUsuarios));
             }
         }
+
+        /// <summary>
+        /// Retorna todos os agentes conectados ao usuário padrão autenticado.
+        /// Apenas usuários padrão (não-agentes) podem acessar esta funcionalidade.
+        /// </summary>
+        [HttpGet("meus-agentes")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetMeusAgentes()
+        {
+            try
+            {
+                var cdUsuarioAtual = _authService.GetCurrentUserId();
+
+                var isAgente = await _authService.IsAgenteAsync(cdUsuarioAtual);
+                if (isAgente)
+                {
+                    return ErrorResponse<IEnumerable<UsuarioResumoDto>>(403,
+                        "Apenas usuários padrão podem acessar esta funcionalidade");
+                }
+
+                var agentes = await _context.ConexaoUsuarios
+                    .Where(c => c.CdUsuario == cdUsuarioAtual)
+                    .Include(c => c.CdUsuarioAgenteNavigation)
+                    .Select(c => new UsuarioResumoDto
+                    {
+                        Cd = c.CdUsuarioAgenteNavigation.CdUsuario,
+                        Nome = c.CdUsuarioAgenteNavigation.NmUsuario,
+                        Email = c.CdUsuarioAgenteNavigation.NmEmail
+                    })
+                    .OrderBy(u => u.Nome)
+                    .ToListAsync();
+
+                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                    agentes,
+                    $"Encontrados {agentes.Count} agentes conectados");
+            }
+            catch (Exception ex)
+            {
+                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusAgentes));
+            }
+        }
+
         /// <summary>
         /// Usuário padrão gera um código temporário de conexão.
         /// </summary>
