@@ -50,14 +50,16 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AgenteOnly", policy =>
         policy.RequireAssertion(async context =>
         {
-            var httpContext = context.Resource as HttpContext;
-            if (httpContext == null) return false;
+            if (context.Resource is HttpContext httpContext)
+            {
+                var authService = httpContext.RequestServices
+                                             .GetRequiredService<IUserAuthorizationService>();
 
-            var authService = httpContext.RequestServices
-                                         .GetRequiredService<IUserAuthorizationService>();
+                var userId = authService.GetCurrentUserId();
+                return await authService.IsAgenteAsync(userId);
+            }
 
-            var userId = authService.GetCurrentUserId();
-            return await authService.IsAgenteAsync(userId);
+            return false;
         }));
 });
 
@@ -90,7 +92,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "RabbitaskWebAPI", Version = "v1" });
 
-    // XML Documentation
+    // XML doc
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -124,19 +126,19 @@ builder.Services.AddSwaggerGen(c =>
 var frontendOrigin = builder.Configuration["FRONTEND_ORIGIN"]
                      ?? "http://localhost:8100";
 
-builder.Services.AddCors();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", cors =>
+    {
+        cors.WithOrigins(frontendOrigin)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 var app = builder.Build();
 
-app.UseCors(cors => cors
-    .WithOrigins(frontendOrigin)
-    .AllowAnyHeader()
-    .AllowAnyMethod()
-    .AllowCredentials()
-);
-
-
-// ----------------------------------------------------------------------
 if (args.Contains("--migrate"))
 {
     using var scope = app.Services.CreateScope();
@@ -146,7 +148,7 @@ if (args.Contains("--migrate"))
     return;
 }
 
-app.UseCors("AllowFrontend");
+app.UseCors("FrontendPolicy");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -161,5 +163,5 @@ app.UseSwaggerUI(c =>
 app.UseStaticFiles();
 
 app.MapControllers();
-app.Run();
 
+app.Run();
