@@ -11,8 +11,8 @@ using RabbitaskWebAPI.Data;
 namespace RabbitaskWebAPI.Migrations
 {
     [DbContext(typeof(RabbitaskContext))]
-    [Migration("20251103000638_SeedInitialData")]
-    partial class SeedInitialData
+    [Migration("20251123011404_InitialCreate")]
+    partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

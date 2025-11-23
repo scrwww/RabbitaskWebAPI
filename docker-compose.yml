@@ -1,21 +1,22 @@
-version: '3.9'
 services:
   rabbitask-mysql:
     image: mysql:8.0
     container_name: rabbitask-mysql
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
       - rabbitask-mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 30s
 
   rabbitask-api:
     build:
@@ -27,6 +28,14 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: >
+        Server=${RABBITASK_DB_HOST};
+        Port=${RABBITASK_DB_PORT};
+        Database=${RABBITASK_DB_NAME};
+        User=${RABBITASK_DB_USER};
+        Password=${RABBITASK_DB_PASSWORD};
     ports:
       - "5000:80"
     restart: unless-stopped

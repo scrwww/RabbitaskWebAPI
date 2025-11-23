@@ -1,21 +1,18 @@
-# Build
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /src
+
+COPY RabbitaskWebAPI/*.csproj RabbitaskWebAPI/
+RUN dotnet restore RabbitaskWebAPI/RabbitaskWebAPI.csproj
+
+COPY RabbitaskWebAPI/. RabbitaskWebAPI/
+RUN dotnet publish RabbitaskWebAPI -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS final
 WORKDIR /app
 
-# Copia csproj e restaura pacotes
-COPY RabbitaskWebAPI/*.csproj ./RabbitaskWebAPI/
-WORKDIR /app/RabbitaskWebAPI
-RUN dotnet restore
+ENV ASPNETCORE_URLS=http://+:80
 
-# Copia todo o restante do código
-COPY RabbitaskWebAPI/. ./
+COPY --from=build /app .
 
-# Publica a aplicação
-RUN dotnet publish -c Release -o /app/publish
-
-# Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
-WORKDIR /app
-COPY --from=build /app/publish .
+# INICIAR A API
 ENTRYPOINT ["dotnet", "RabbitaskWebAPI.dll"]
-

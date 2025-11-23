@@ -1,6 +1,6 @@
 ﻿using System;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
-using MySql.EntityFrameworkCore.Metadata;
 
 #nullable disable
 
@@ -11,35 +11,37 @@ namespace RabbitaskWebAPI.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterDatabase()
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "prioridade",
                 columns: table => new
                 {
                     cd_prioridade = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     nm_prioridade = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PRIMARY", x => x.cd_prioridade);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tag",
                 columns: table => new
                 {
                     cd_tag = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     nm_tag = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PRIMARY", x => x.cd_tag);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "TagTarefa",
@@ -53,46 +55,52 @@ namespace RabbitaskWebAPI.Migrations
                 {
                     table.PrimaryKey("PK_TagTarefa", x => new { x.CdTag, x.CdUsuario, x.CdTarefa });
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tipo_sentimento",
                 columns: table => new
                 {
                     cd_tipo_sentimento = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     nm_tipo_sentimento = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PRIMARY", x => x.cd_tipo_sentimento);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tipo_usuario",
                 columns: table => new
                 {
                     cd_tipo_usuario = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     nm_tipo_usuario = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PRIMARY", x => x.cd_tipo_usuario);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "usuario",
                 columns: table => new
                 {
                     cd_usuario = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
-                    nm_usuario = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: true),
-                    nm_email = table.Column<string>(type: "varchar(254)", maxLength: 254, nullable: true),
-                    nm_senha = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: true),
-                    cd_telefone = table.Column<string>(type: "varchar(30)", maxLength: 30, nullable: true),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    nm_usuario = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    nm_email = table.Column<string>(type: "varchar(254)", maxLength: 254, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    nm_senha = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    cd_telefone = table.Column<string>(type: "varchar(30)", maxLength: 30, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     cd_tipo_usuario = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -104,15 +112,16 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "tipo_usuario",
                         principalColumn: "cd_tipo_usuario");
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "codigo_conexao",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
-                    codigo = table.Column<string>(type: "varchar(8)", maxLength: 8, nullable: false),
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    codigo = table.Column<string>(type: "varchar(8)", maxLength: 8, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     cd_usuario = table.Column<int>(type: "int", nullable: false),
                     data_criacao = table.Column<DateTime>(type: "datetime", nullable: false),
                     data_expiracao = table.Column<DateTime>(type: "datetime", nullable: false),
@@ -128,7 +137,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalColumn: "cd_usuario",
                         onDelete: ReferentialAction.Cascade);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "conexao_usuario",
@@ -151,7 +160,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "usuario",
                         principalColumn: "cd_usuario");
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tarefa",
@@ -159,9 +168,11 @@ namespace RabbitaskWebAPI.Migrations
                 {
                     cd_tarefa = table.Column<int>(type: "int", nullable: false),
                     cd_usuario = table.Column<int>(type: "int", nullable: false),
-                    nm_tarefa = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true),
+                    nm_tarefa = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     cd_prioridade = table.Column<int>(type: "int", nullable: true),
-                    ds_tarefa = table.Column<string>(type: "varchar(2000)", maxLength: 2000, nullable: true),
+                    ds_tarefa = table.Column<string>(type: "varchar(2000)", maxLength: 2000, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     dt_prazo = table.Column<DateTime>(type: "datetime", nullable: true),
                     cd_usuario_proprietario = table.Column<int>(type: "int", nullable: true),
                     dt_criacao = table.Column<DateTime>(type: "datetime", nullable: true),
@@ -186,7 +197,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "usuario",
                         principalColumn: "cd_usuario");
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "UsuarioUsuario",
@@ -211,7 +222,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalColumn: "cd_usuario",
                         onDelete: ReferentialAction.Cascade);
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "anexo",
@@ -221,6 +232,7 @@ namespace RabbitaskWebAPI.Migrations
                     cd_usuario = table.Column<int>(type: "int", nullable: false),
                     cd_tarefa = table.Column<int>(type: "int", nullable: false),
                     nm_caminho_anexo = table.Column<string>(type: "varchar(500)", maxLength: 500, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
@@ -231,7 +243,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "tarefa",
                         principalColumns: new[] { "cd_usuario", "cd_tarefa" });
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tarefa_feedback",
@@ -241,6 +253,7 @@ namespace RabbitaskWebAPI.Migrations
                     cd_usuario = table.Column<int>(type: "int", nullable: false),
                     cd_tarefa = table.Column<int>(type: "int", nullable: false),
                     ds_feedback = table.Column<string>(type: "varchar(2000)", maxLength: 2000, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
@@ -256,7 +269,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "tipo_sentimento",
                         principalColumn: "cd_tipo_sentimento");
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "tarefa_tag",
@@ -280,7 +293,7 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "tarefa",
                         principalColumns: new[] { "cd_usuario", "cd_tarefa" });
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "topico",
@@ -289,7 +302,8 @@ namespace RabbitaskWebAPI.Migrations
                     cd_topico = table.Column<int>(type: "int", nullable: false),
                     cd_usuario = table.Column<int>(type: "int", nullable: false),
                     cd_tarefa = table.Column<int>(type: "int", nullable: false),
-                    nm_topico = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true),
+                    nm_topico = table.Column<string>(type: "varchar(250)", maxLength: 250, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     ic_concluido = table.Column<bool>(type: "tinyint(1)", nullable: true)
                 },
                 constraints: table =>
@@ -301,7 +315,81 @@ namespace RabbitaskWebAPI.Migrations
                         principalTable: "tarefa",
                         principalColumns: new[] { "cd_usuario", "cd_tarefa" });
                 })
-                .Annotation("MySQL:Charset", "utf8mb4");
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.InsertData(
+                table: "prioridade",
+                columns: new[] { "cd_prioridade", "nm_prioridade" },
+                values: new object[,]
+                {
+                    { 1, "Super Alta" },
+                    { 2, "Alta" },
+                    { 3, "Média Alta" },
+                    { 4, "Média" },
+                    { 5, "Média Baixa" },
+                    { 6, "Baixa" },
+                    { 7, "Super Baixa" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "tag",
+                columns: new[] { "cd_tag", "nm_tag" },
+                values: new object[,]
+                {
+                    { 1, "Escolar" },
+                    { 2, "Escola" },
+                    { 3, "Português" },
+                    { 4, "Matemática" },
+                    { 5, "Inglês" },
+                    { 6, "Geografia" },
+                    { 7, "Espanhol" },
+                    { 8, "Filosofia" },
+                    { 9, "Casa" },
+                    { 10, "Trabalho" },
+                    { 11, "Trabalho Escolar" },
+                    { 12, "Lição de Casa" },
+                    { 13, "Limpeza da Casa" },
+                    { 14, "Extras" },
+                    { 15, "Extra" },
+                    { 16, "Sociologia" },
+                    { 17, "Biologia" },
+                    { 18, "Física" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "tipo_sentimento",
+                columns: new[] { "cd_tipo_sentimento", "nm_tipo_sentimento" },
+                values: new object[,]
+                {
+                    { 1, "Satisfação" },
+                    { 2, "Confiança" },
+                    { 3, "Surpresa" },
+                    { 4, "Alegria" },
+                    { 5, "Felicidade" },
+                    { 6, "Gratidão" },
+                    { 7, "Orgulho" },
+                    { 8, "Inspiração" },
+                    { 9, "Apreciação" },
+                    { 10, "Aprovação" },
+                    { 11, "Curiosidade" },
+                    { 12, "Dúvida" },
+                    { 13, "Confusão" },
+                    { 14, "Desapontamento" },
+                    { 15, "Frustração" },
+                    { 16, "Preocupação" },
+                    { 17, "Desaprovação" },
+                    { 18, "Decepção" },
+                    { 19, "Aversão" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "tipo_usuario",
+                columns: new[] { "cd_tipo_usuario", "nm_tipo_usuario" },
+                values: new object[,]
+                {
+                    { 1, "Usuário Comum" },
+                    { 2, "Agente" }
+                });
 
             migrationBuilder.CreateIndex(
                 name: "fk_anexo_tarefa",

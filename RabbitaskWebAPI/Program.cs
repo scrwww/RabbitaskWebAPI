@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using MySql.Data.MySqlClient;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -12,26 +10,33 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
 builder.Configuration.AddEnvironmentVariables();
 
-// =======================
-// Database setup (MySQL)
-// =======================
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? $"Server={builder.Configuration["RABBITASK_DB_HOST"]};" +
+       $"Port={builder.Configuration["RABBITASK_DB_PORT"]};" +
+       $"Database={builder.Configuration["RABBITASK_DB_NAME"]};" +
+       $"User={builder.Configuration["RABBITASK_DB_USER"]};" +
+       $"Password={builder.Configuration["RABBITASK_DB_PASSWORD"]};";
+
 builder.Services.AddDbContext<RabbitaskContext>(options =>
 {
-    var connectionString = $"Server={builder.Configuration["RABBITASK_DB_HOST"]};" +
-                           $"Port={builder.Configuration["RABBITASK_DB_PORT"]};" +
-                           $"Database={builder.Configuration["RABBITASK_DB_NAME"]};" +
-                           $"User={builder.Configuration["RABBITASK_DB_USER"]};" +
-                           $"Password={builder.Configuration["RABBITASK_DB_PASSWORD"]};";
- options.UseMySQL(connectionString);
+    options.UseMySql(connectionString,
+        ServerVersion.AutoDetect(connectionString),
+        mysql =>
+        {
+            mysql.EnableRetryOnFailure(
+                maxRetryCount: 10,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null
+            );
+        });
 });
 
-// =======================
-// Services & Authorization
-// =======================
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();
 builder.Services.AddScoped<ICodigoConexaoService, CodigoConexaoService>();
@@ -48,16 +53,15 @@ builder.Services.AddAuthorization(options =>
             var httpContext = context.Resource as HttpContext;
             if (httpContext == null) return false;
 
-            var authService = httpContext.RequestServices.GetRequiredService<IUserAuthorizationService>();
+            var authService = httpContext.RequestServices
+                                         .GetRequiredService<IUserAuthorizationService>();
+
             var userId = authService.GetCurrentUserId();
             return await authService.IsAgenteAsync(userId);
         }));
 });
 
-// =======================
-// JWT Authentication
-// =======================
-var jwtConfig = builder.Configuration;
+var jwt = builder.Configuration;
 
 builder.Services.AddAuthentication(options =>
 {
@@ -66,9 +70,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    var key = jwtConfig["JWT_KEY"];
+    var key = jwt["JWT_KEY"];
     if (string.IsNullOrWhiteSpace(key))
-        throw new InvalidOperationException("JWT_KEY is not set in environment.");
+        throw new InvalidOperationException("JWT_KEY missing");
 
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -76,22 +80,25 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtConfig["JWT_ISSUER"],
-        ValidAudience = jwtConfig["JWT_AUDIENCE"],
+        ValidIssuer = jwt["JWT_ISSUER"],
+        ValidAudience = jwt["JWT_AUDIENCE"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
     };
 });
 
-// =======================
-// Swagger
-// =======================
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "RabbitaskWebAPI", Version = "v1" });
 
+    // XML Documentation
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        c.IncludeXmlComments(xmlPath);
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Description = "JWT Authorization. Ex: Bearer {token}",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
@@ -103,35 +110,44 @@ builder.Services.AddSwaggerGen(c =>
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
             },
             Array.Empty<string>()
         }
     });
-
-    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-        c.IncludeXmlComments(xmlPath);
 });
 
-// =======================
-// CORS
-// =======================
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("http://localhost:8100")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
+var frontendOrigin = builder.Configuration["FRONTEND_ORIGIN"]
+                     ?? "http://localhost:8100";
+
+builder.Services.AddCors();
 
 var app = builder.Build();
 
+app.UseCors(cors => cors
+    .WithOrigins(frontendOrigin)
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()
+);
+
+
+// ----------------------------------------------------------------------
+if (args.Contains("--migrate"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<RabbitaskContext>();
+    db.Database.Migrate();
+    Console.WriteLine("Migrations aplicadas com sucesso.");
+    return;
+}
+
 app.UseCors("AllowFrontend");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -143,35 +159,7 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseStaticFiles();
+
 app.MapControllers();
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<RabbitaskContext>();
-
-    // Retry simples para aguardar o MySQL ficar pronto
-    var retries = 10;
-    var delay = TimeSpan.FromSeconds(5);
-
-    while (retries > 0)
-    {
-        try
-        {
-            dbContext.Database.Migrate();
-            Console.WriteLine("Migrations aplicadas com sucesso!");
-            break;
-        }
-        catch (MySql.Data.MySqlClient.MySqlException ex)
-        {
-            retries--;
-            Console.WriteLine($"Erro ao conectar com MySQL, tentando novamente em {delay.Seconds}s... ({retries} tentativas restantes)");
-            System.Threading.Thread.Sleep(delay);
-        }
-    }
-
-    if (retries == 0)
-        throw new Exception("Não foi possível aplicar migrations. Verifique o banco de dados.");
-}
-
-
 app.Run();
+
