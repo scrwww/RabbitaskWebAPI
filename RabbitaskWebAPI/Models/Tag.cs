@@ -16,6 +16,7 @@ namespace RabbitaskWebAPI.Models
 
         [Key]
         [Column("cd_tag")]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int CdTag { get; set; }
         [Column("nm_tag")]
         [StringLength(250)]

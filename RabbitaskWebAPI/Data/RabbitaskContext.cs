@@ -57,6 +57,8 @@ namespace RabbitaskWebAPI.Data
                                         {
                                         entity.HasKey(e => e.CdTag)
                                         .HasName("PRIMARY");
+                                        entity.Property(e => e.CdTag)
+                                        .ValueGeneratedOnAdd();
 
                                         entity.HasMany(d => d.Cds)
                                         .WithMany(p => p.CdTags)
