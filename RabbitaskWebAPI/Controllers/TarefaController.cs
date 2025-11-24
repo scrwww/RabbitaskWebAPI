@@ -103,36 +103,62 @@ namespace RabbitaskWebAPI.Controllers
 
                 await ValidarDependenciasTarefa(dto);
 
-                using var transaction = await _context.Database.BeginTransactionAsync();
-
-                var proximoCodigo = await ObterProximoCodigoTarefa(dto.CdUsuario);
-
-                var novaTarefa = new Tarefa
+                // IMPORTANT: Wrap transactional work inside the execution strategy so the retrying strategy
+                // (e.g. MySqlRetryingExecutionStrategy) can re-run the whole delegate safely.
+                // Note: for maximum safety on retries consider using IDbContextFactory<RabbitaskContext>
+                // and creating a fresh context inside the ExecuteAsync delegate.
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    CdTarefa = proximoCodigo,
-                    NmTarefa = dto.Nome.Trim(),
-                    DsTarefa = dto.Descricao?.Trim(),
-                    CdPrioridade = dto.CdPrioridade,
-                    DtPrazo = dto.DataPrazo,
-                    CdUsuario = dto.CdUsuario,
-                    CdUsuarioProprietario = cdUsuarioAtual,
-                    DtCriacao = DateTime.Now
-                };
+                    // Begin transaction inside the execution strategy delegate
+                    await using var transaction = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        var proximoCodigo = await ObterProximoCodigoTarefa(dto.CdUsuario);
 
-                _context.Tarefas.Add(novaTarefa);
-                await _context.SaveChangesAsync();
+                        var novaTarefa = new Tarefa
+                        {
+                            CdTarefa = proximoCodigo,
+                            NmTarefa = dto.Nome.Trim(),
+                            DsTarefa = dto.Descricao?.Trim(),
+                            CdPrioridade = dto.CdPrioridade,
+                            DtPrazo = dto.DataPrazo,
+                            CdUsuario = dto.CdUsuario,
+                            CdUsuarioProprietario = cdUsuarioAtual,
+                            DtCriacao = DateTime.Now
+                        };
 
-                // Cria ou associa tags
-                if (dto.TagNomes?.Any() == true)
-                    await SubstituirTagsPorNomeNaTarefa(novaTarefa, dto.TagNomes);
+                        _context.Tarefas.Add(novaTarefa);
+                        await _context.SaveChangesAsync();
 
-                await transaction.CommitAsync();
+                        // Cria ou associa tags
+                        if (dto.TagNomes?.Any() == true)
+                            await SubstituirTagsPorNomeNaTarefa(novaTarefa, dto.TagNomes);
+
+                        await transaction.CommitAsync();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
+
+                // Retrieve a minimal created task info for response
+                var ultima = await _context.Tarefas
+                    .Where(t => t.CdUsuario == dto.CdUsuario)
+                    .OrderByDescending(t => t.CdTarefa)
+                    .Select(t => new { t.CdTarefa, t.NmTarefa, t.DtCriacao })
+                    .FirstOrDefaultAsync();
+
+                if (ultima == null)
+                    return ErrorResponse<TarefaCriadaDto>(500, "Erro ao recuperar a tarefa criada");
 
                 return SuccessResponse(new TarefaCriadaDto
                 {
-                    Cd = novaTarefa.CdTarefa,
-                    Nome = novaTarefa.NmTarefa,
-                    DataCriacao = novaTarefa.DtCriacao
+                    Cd = ultima.CdTarefa,
+                    Nome = ultima.NmTarefa,
+                    DataCriacao = ultima.DtCriacao
                 }, "Tarefa criada com sucesso");
             }
             catch (Exception ex)
@@ -199,8 +225,29 @@ namespace RabbitaskWebAPI.Controllers
                 if (tarefa == null)
                     return ErrorResponse<object>(404, "Tarefa não encontrada ou sem permissão");
 
-                _context.Tarefas.Remove(tarefa);
-                await _context.SaveChangesAsync();
+                // Use the execution strategy to perform the delete safely when retries are enabled.
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        // Remove all tag associations first to avoid FK/required-relationship problems.
+                        // This severs the many-to-many relationship entries (TarefaTag) explicitly.
+                        tarefa.CdTags.Clear();
+                        await _context.SaveChangesAsync();
+
+                        _context.Tarefas.Remove(tarefa);
+                        await _context.SaveChangesAsync();
+
+                        await transaction.CommitAsync();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
 
                 return SuccessResponse("Tarefa deletada com sucesso");
             }
