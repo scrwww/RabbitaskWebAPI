@@ -60,6 +60,6 @@ namespace RabbitaskWebAPI.Models
 
         [ForeignKey("CdUsuario,CdTarefa")]
         [InverseProperty("Cds")]
-        public virtual ICollection<Tag> CdTags { get; set; }
+        public virtual ICollection<Tag>? CdTags { get; set; }
     }
 }

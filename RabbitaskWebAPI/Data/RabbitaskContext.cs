@@ -62,8 +62,8 @@ namespace RabbitaskWebAPI.Data
                     .WithMany(p => p.CdTags)
                     .UsingEntity<Dictionary<string, object>>(
                         "TarefaTag",
-                        l => l.HasOne<Tarefa>().WithMany().HasForeignKey("CdUsuario", "CdTarefa").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_tarefa_tag_tarefa"),
-                        r => r.HasOne<Tag>().WithMany().HasForeignKey("CdTag").OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_tarefa_tag_tag"),
+                        l => l.HasOne<Tarefa>().WithMany().HasForeignKey("CdUsuario", "CdTarefa").OnDelete(DeleteBehavior.Cascade).HasConstraintName("fk_tarefa_tag_tarefa"),
+                        r => r.HasOne<Tag>().WithMany().HasForeignKey("CdTag").OnDelete(DeleteBehavior.Cascade).HasConstraintName("fk_tarefa_tag_tag"),
                         j =>
                         {
                             j.HasKey("CdTag", "CdUsuario", "CdTarefa").HasName("PRIMARY");
