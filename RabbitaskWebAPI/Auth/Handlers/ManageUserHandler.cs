@@ -20,7 +20,7 @@ public class ManageUserHandler : AuthorizationHandler<ManageUserRequirement>
     {
         try
         {
-            var currentUserId = _authService.GetCurrentUserId();
+            var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
             // pega o alvo
             var httpContext = _httpContextAccessor.HttpContext;
@@ -30,9 +30,9 @@ public class ManageUserHandler : AuthorizationHandler<ManageUserRequirement>
             {
                 if (int.TryParse(objCdUsuario?.ToString(), out int cdUsuarioAlvo))
                 {
-                    var canManage = await _authService.CanManageUserAsync(currentUserId, cdUsuarioAlvo);
+                    var podeGerenciar = await _authService.PodeGerenciarUsuarioAsync(cdUsuarioAtual, cdUsuarioAlvo);
 
-                    if (canManage)
+                    if (podeGerenciar)
                     {
                         context.Succeed(requirement);
                     }

@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   rabbitask-mysql:
     image: mysql:8.0
@@ -14,14 +16,18 @@ services:
       - rabbitask-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+    networks:
+      - rabbitask-network
 
   rabbitask-api:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     container_name: rabbitask-api
     depends_on:
       rabbitask-mysql:
@@ -29,16 +35,21 @@ services:
     env_file:
       - .env
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: >
-        Server=${RABBITASK_DB_HOST};
-        Port=${RABBITASK_DB_PORT};
-        Database=${RABBITASK_DB_NAME};
-        User=${RABBITASK_DB_USER};
-        Password=${RABBITASK_DB_PASSWORD};
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__RabbitaskDb: "Server=${RABBITASK_DB_HOST};Port=${RABBITASK_DB_PORT};Database=${RABBITASK_DB_NAME};Uid=${RABBITASK_DB_USER};Pwd=${RABBITASK_DB_PASSWORD};"
+      JwtConfig__Key: ${JWT_KEY}
+      JwtConfig__Issuer: ${JWT_ISSUER}
+      JwtConfig__Audience: ${JWT_AUDIENCE}
     ports:
-      - "5000:80"
+      - "5000:5000"
     restart: unless-stopped
+    networks:
+      - rabbitask-network
 
 volumes:
   rabbitask-mysql-data:
+    driver: local
+
+networks:
+  rabbitask-network:
+    driver: bridge

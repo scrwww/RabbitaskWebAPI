@@ -55,8 +55,8 @@ builder.Services.AddAuthorization(options =>
                 var authService = httpContext.RequestServices
                                              .GetRequiredService<IUserAuthorizationService>();
 
-                var userId = authService.GetCurrentUserId();
-                return await authService.IsAgenteAsync(userId);
+                var cdUsuario = authService.ObterCdUsuarioAtual();
+                return await authService.EhAgenteAsync(cdUsuario);
             }
 
             return false;

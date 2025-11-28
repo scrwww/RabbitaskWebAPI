@@ -58,56 +58,56 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         /// <summary>
-        /// respostas padronizada.. isso foi bme útil
+        /// respostas padronizadas - isso foi bem útil
         /// </summary>
-        protected ActionResult<ApiResponse<T>> SuccessResponse<T>(T data, string message = "Operação realizada com sucesso")
+        protected ActionResult<ApiResponse<T>> RespostaSucesso<T>(T dados, string mensagem = "Operação realizada com sucesso")
         {
-            return Ok(ApiResponse<T>.CreateSuccess(data, message));
+            return Ok(ApiResponse<T>.CreateSuccess(dados, mensagem));
         }
 
-        protected ActionResult<ApiResponse<object>> SuccessResponse(string message = "Operação realizada com sucesso")
+        protected ActionResult<ApiResponse<object>> RespostaSucesso(string mensagem = "Operação realizada com sucesso")
         {
-            return Ok(ApiResponse<object>.CreateSuccess(message));
+            return Ok(ApiResponse<object>.CreateSuccess(mensagem));
         }
 
-        protected ActionResult<ApiResponse<T>> ErrorResponse<T>(int statusCode, string message, params string[] errors)
+        protected ActionResult<ApiResponse<T>> RespostaErro<T>(int codigoStatus, string mensagem, params string[] erros)
         {
-            var response = ApiResponse<T>.CreateError(message, errors);
+            var resposta = ApiResponse<T>.CreateError(mensagem, erros);
 
-            return statusCode switch
+            return codigoStatus switch
             {
-                400 => BadRequest(response),
-                401 => StatusCode(401, response),
-                403 => StatusCode(403, response),
-                404 => NotFound(response),
-                409 => Conflict(response),
-                _ => StatusCode(statusCode, response)
+                400 => BadRequest(resposta),
+                401 => StatusCode(401, resposta),
+                403 => StatusCode(403, resposta),
+                404 => NotFound(resposta),
+                409 => Conflict(resposta),
+                _ => StatusCode(codigoStatus, resposta)
             };
         }
 
         /// <summary>
         /// Tratar as exceções
         /// </summary>
-        protected ActionResult<ApiResponse<T>> HandleException<T>(Exception ex, string operationName)
+        protected ActionResult<ApiResponse<T>> TratarExcecao<T>(Exception ex, string nomeDaOperacao)
         {
             return ex switch
             {
-                UnauthorizedAccessException => ErrorResponse<T>(401, "Acesso não autorizado", ex.Message),
-                ArgumentException => ErrorResponse<T>(400, "Dados inválidos", ex.Message),
-                InvalidOperationException => ErrorResponse<T>(409, "Operação não permitida", ex.Message),
-                _ => HandleGenericException<T>(ex, operationName)
+                UnauthorizedAccessException => RespostaErro<T>(401, "Acesso não autorizado", ex.Message),
+                ArgumentException => RespostaErro<T>(400, "Dados inválidos", ex.Message),
+                InvalidOperationException => RespostaErro<T>(409, "Operação não permitida", ex.Message),
+                _ => TratarExcecaoGenerica<T>(ex, nomeDaOperacao)
             };
         }
 
-        private ActionResult<ApiResponse<T>> HandleGenericException<T>(Exception ex, string operationName)
+        private ActionResult<ApiResponse<T>> TratarExcecaoGenerica<T>(Exception ex, string nomeDaOperacao)
         {
-            var correlationId = Guid.NewGuid().ToString("N")[..8];
+            var cdCorrelacao = Guid.NewGuid().ToString("N")[..8];
             _logger.LogError(ex, "Erro inesperado em {OperationName}. CorrelationId: {CorrelationId}",
-                operationName, correlationId);
+                nomeDaOperacao, cdCorrelacao);
 
-            return ErrorResponse<T>(500,
+            return RespostaErro<T>(500,
                 "Erro interno do servidor",
-                $"Entre em contato com o suporte informando o código: {correlationId}");
+                $"Entre em contato com o suporte informando o código: {cdCorrelacao}");
         }
     }
 }

@@ -35,7 +35,7 @@ namespace RabbitaskWebAPI.Controllers
         /// Permite filtro por código, prioridade e status de conclusão.
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> GetTarefas(
+        public async Task<ActionResult<ApiResponse<IEnumerable<TarefaDto>>>> ObterTarefas(
             [FromQuery] int? codigo = null,
             [FromQuery] int? cdUsuario = null,
             [FromQuery] int? cdPrioridade = null,
@@ -45,12 +45,12 @@ namespace RabbitaskWebAPI.Controllers
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
-                var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
+                var cdsUsuariosGerenciados = await _authService.ObterCdsUsuariosGerenciadosAsync(cdUsuarioAtual);
                 var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
 
                 if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))
-                    return ErrorResponse<IEnumerable<TarefaDto>>(403, "Você não tem permissão para acessar tarefas deste usuário");
+                    return RespostaErro<IEnumerable<TarefaDto>>(403, "Você não tem permissão para acessar tarefas deste usuário");
 
                 var query = BuildTarefaQuery()
                     .Where(t => t.CdUsuario == cdUsuarioAlvo);
@@ -68,13 +68,13 @@ namespace RabbitaskWebAPI.Controllers
 
                 var totalPages = (int)Math.Ceiling((double)totalItems / paginaTamanho);
 
-                return SuccessResponse<IEnumerable<TarefaDto>>(
+                return RespostaSucesso<IEnumerable<TarefaDto>>(
                     tarefas,
                     $"Encontradas {totalItems} tarefas (página {pagina} de {totalPages})");
             }
             catch (Exception ex)
             {
-                return HandleException<IEnumerable<TarefaDto>>(ex, nameof(GetTarefas));
+                return TratarExcecao<IEnumerable<TarefaDto>>(ex, nameof(ObterTarefas));
             }
         }
 
@@ -93,13 +93,13 @@ namespace RabbitaskWebAPI.Controllers
                 if (!ModelState.IsValid)
                 {
                     var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToArray();
-                    return ErrorResponse<TarefaCriadaDto>(400, "Dados inválidos", errors);
+                    return RespostaErro<TarefaCriadaDto>(400, "Dados inválidos", errors);
                 }
 
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, dto.CdUsuario))
-                    return ErrorResponse<TarefaCriadaDto>(403, "Você não tem permissão para criar tarefas para este usuário");
+                if (!await _authService.PodeGerenciarUsuarioAsync(cdUsuarioAtual, dto.CdUsuario))
+                    return RespostaErro<TarefaCriadaDto>(403, "Você não tem permissão para criar tarefas para este usuário");
 
                 await ValidarDependenciasTarefa(dto);
 
@@ -108,13 +108,19 @@ namespace RabbitaskWebAPI.Controllers
                 // Note: for maximum safety on retries consider using IDbContextFactory<RabbitaskContext>
                 // and creating a fresh context inside the ExecuteAsync delegate.
                 var strategy = _context.Database.CreateExecutionStrategy();
+                TarefaCriadaDto? tarefaCriada = null;
+
                 await strategy.ExecuteAsync(async () =>
                 {
                     // Begin transaction inside the execution strategy delegate
                     await using var transaction = await _context.Database.BeginTransactionAsync();
                     try
                     {
-                        var proximoCodigo = await ObterProximoCodigoTarefa(dto.CdUsuario);
+                        // Obter o próximo código dentro da transação para evitar race condition
+                        var proximoCodigo = await _context.Tarefas
+                            .Where(t => t.CdUsuario == dto.CdUsuario)
+                            .MaxAsync(t => (int?)t.CdTarefa) ?? 0;
+                        proximoCodigo += 1;
 
                         var novaTarefa = new Tarefa
                         {
@@ -136,6 +142,14 @@ namespace RabbitaskWebAPI.Controllers
                             await SubstituirTagsPorNomeNaTarefa(novaTarefa, dto.TagNomes);
 
                         await transaction.CommitAsync();
+
+                        // Capturar dados da tarefa criada dentro da transação antes do commit
+                        tarefaCriada = new TarefaCriadaDto
+                        {
+                            Cd = novaTarefa.CdTarefa,
+                            Nome = novaTarefa.NmTarefa,
+                            DataCriacao = novaTarefa.DtCriacao
+                        };
                     }
                     catch
                     {
@@ -144,26 +158,14 @@ namespace RabbitaskWebAPI.Controllers
                     }
                 });
 
-                // Retrieve a minimal created task info for response
-                var ultima = await _context.Tarefas
-                    .Where(t => t.CdUsuario == dto.CdUsuario)
-                    .OrderByDescending(t => t.CdTarefa)
-                    .Select(t => new { t.CdTarefa, t.NmTarefa, t.DtCriacao })
-                    .FirstOrDefaultAsync();
+                if (tarefaCriada == null)
+                    return RespostaErro<TarefaCriadaDto>(500, "Erro ao criar a tarefa");
 
-                if (ultima == null)
-                    return ErrorResponse<TarefaCriadaDto>(500, "Erro ao recuperar a tarefa criada");
-
-                return SuccessResponse(new TarefaCriadaDto
-                {
-                    Cd = ultima.CdTarefa,
-                    Nome = ultima.NmTarefa,
-                    DataCriacao = ultima.DtCriacao
-                }, "Tarefa criada com sucesso");
+                return RespostaSucesso(tarefaCriada, "Tarefa criada com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<TarefaCriadaDto>(ex, nameof(CriarTarefa));
+                return TratarExcecao<TarefaCriadaDto>(ex, nameof(CriarTarefa));
             }
         }
 
@@ -182,7 +184,7 @@ namespace RabbitaskWebAPI.Controllers
             {
                 var tarefa = await ObterTarefaComPermissao(codigo, cdUsuario);
                 if (tarefa == null)
-                    return ErrorResponse<object>(404, "Tarefa não encontrada ou sem permissão");
+                    return RespostaErro<object>(404, "Tarefa não encontrada ou sem permissão");
 
                 if (!string.IsNullOrWhiteSpace(dto.Nome))
                     tarefa.NmTarefa = dto.Nome.Trim();
@@ -193,7 +195,7 @@ namespace RabbitaskWebAPI.Controllers
                 if (dto.CdPrioridade.HasValue)
                 {
                     if (!await ValidarPrioridade(dto.CdPrioridade.Value))
-                        return ErrorResponse<object>(400, "Prioridade inválida");
+                        return RespostaErro<object>(400, "Prioridade inválida");
                     tarefa.CdPrioridade = dto.CdPrioridade;
                 }
 
@@ -205,11 +207,11 @@ namespace RabbitaskWebAPI.Controllers
 
                 await _context.SaveChangesAsync();
 
-                return SuccessResponse("Tarefa atualizada com sucesso");
+                return RespostaSucesso("Tarefa atualizada com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(AtualizarTarefa));
+                return TratarExcecao<object>(ex, nameof(AtualizarTarefa));
             }
         }
 
@@ -223,7 +225,7 @@ namespace RabbitaskWebAPI.Controllers
             {
                 var tarefa = await ObterTarefaComPermissao(codigo, cdUsuario);
                 if (tarefa == null)
-                    return ErrorResponse<object>(404, "Tarefa não encontrada ou sem permissão");
+                    return RespostaErro<object>(404, "Tarefa não encontrada ou sem permissão");
 
                 // Use the execution strategy to perform the delete safely when retries are enabled.
                 var strategy = _context.Database.CreateExecutionStrategy();
@@ -249,11 +251,11 @@ namespace RabbitaskWebAPI.Controllers
                     }
                 });
 
-                return SuccessResponse("Tarefa deletada com sucesso");
+                return RespostaSucesso("Tarefa deletada com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(DeletarTarefa));
+                return TratarExcecao<object>(ex, nameof(DeletarTarefa));
             }
         }
 
@@ -267,19 +269,19 @@ namespace RabbitaskWebAPI.Controllers
             {
                 var tarefa = await ObterTarefaComPermissao(codigo, cdUsuario);
                 if (tarefa == null)
-                    return ErrorResponse<object>(404, "Tarefa não encontrada ou sem permissão");
+                    return RespostaErro<object>(404, "Tarefa não encontrada ou sem permissão");
 
                 if (tarefa.DtConclusao.HasValue)
-                    return ErrorResponse<object>(409, "Tarefa já está concluída");
+                    return RespostaErro<object>(409, "Tarefa já está concluída");
 
                 tarefa.DtConclusao = DateTime.Now;
                 await _context.SaveChangesAsync();
 
-                return SuccessResponse("Tarefa marcada como concluída");
+                return RespostaSucesso("Tarefa marcada como concluída");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(ConcluirTarefa));
+                return TratarExcecao<object>(ex, nameof(ConcluirTarefa));
             }
         }
 
@@ -293,19 +295,19 @@ namespace RabbitaskWebAPI.Controllers
             {
                 var tarefa = await ObterTarefaComPermissao(codigo, cdUsuario);
                 if (tarefa == null)
-                    return ErrorResponse<object>(404, "Tarefa não encontrada ou sem permissão");
+                    return RespostaErro<object>(404, "Tarefa não encontrada ou sem permissão");
 
                 if (!tarefa.DtConclusao.HasValue)
-                    return ErrorResponse<object>(409, "Tarefa já está em aberto");
+                    return RespostaErro<object>(409, "Tarefa já está em aberto");
 
                 tarefa.DtConclusao = null;
                 await _context.SaveChangesAsync();
 
-                return SuccessResponse("Tarefa reaberta com sucesso");
+                return RespostaSucesso("Tarefa reaberta com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(ReabrirTarefa));
+                return TratarExcecao<object>(ex, nameof(ReabrirTarefa));
             }
         }
 
@@ -361,8 +363,8 @@ namespace RabbitaskWebAPI.Controllers
 
         private async Task<Tarefa?> ObterTarefaComPermissao(int codigoTarefa, int? cdUsuario = null)
         {
-            var cdUsuarioAtual = _authService.GetCurrentUserId();
-            var cdsUsuariosGerenciados = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+            var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
+            var cdsUsuariosGerenciados = await _authService.ObterCdsUsuariosGerenciadosAsync(cdUsuarioAtual);
             var cdUsuarioAlvo = cdUsuario ?? cdUsuarioAtual;
 
             if (!cdsUsuariosGerenciados.Contains(cdUsuarioAlvo))

@@ -29,100 +29,100 @@ namespace RabbitaskWebAPI.Controllers
         }
 
         /// <summary>
-        /// Autentica um usu·rio e retorna um token JWT
+        /// Autentica um usu√°rio e retorna um token JWT
         /// </summary>
         [HttpPost("login")]
-        public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login([FromBody] LoginDto loginDto)
+        public async Task<ActionResult<ApiResponse<RespostaSessaoDto>>> Autenticar([FromBody] CredenciaisDto credenciaisDto)
         {
             try
             {
                 if (!ModelState.IsValid)
                 {
-                    var errors = ModelState.Values
+                    var erros = ModelState.Values
                         .SelectMany(v => v.Errors)
                         .Select(e => e.ErrorMessage)
                         .ToArray();
-                    return ErrorResponse<LoginResponseDto>(400, "Dados inv·lidos", errors);
+                    return RespostaErro<RespostaSessaoDto>(400, "Dados inv√°lidos", erros);
                 }
 
-                var hashedPassword = HasherSenha.Hash(loginDto.Senha);
-                var user = await _context.Usuarios
-                    .FirstOrDefaultAsync(u => u.NmEmail == loginDto.Email && u.NmSenha == hashedPassword);
+                var senhaHash = HasherSenha.Hash(credenciaisDto.Senha);
+                var usuario = await _context.Usuarios
+                    .FirstOrDefaultAsync(u => u.NmEmail == credenciaisDto.Email && u.NmSenha == senhaHash);
 
-                if (user == null)
+                if (usuario == null)
                 {
-                    _logger.LogWarning("Tentativa de login falhou para email: {Email}", loginDto.Email);
-                    return ErrorResponse<LoginResponseDto>(401, "Credenciais inv·lidas");
+                    _logger.LogWarning("Tentativa de autentica√ß√£o falhou para email: {Email}", credenciaisDto.Email);
+                    return RespostaErro<RespostaSessaoDto>(401, "Credenciais inv√°lidas");
                 }
 
-                var token = GerarTokenJwt(user);
+                var token = GerarTokenJwt(usuario);
 
-                _logger.LogInformation("Usu·rio {UserId} autenticado com sucesso", user.CdUsuario);
+                _logger.LogInformation("Usu√°rio {UserId} autenticado com sucesso", usuario.CdUsuario);
 
-                return SuccessResponse(new LoginResponseDto 
+                return RespostaSucesso(new RespostaSessaoDto 
                 { 
                     Token = token,
-                    CdUsuario = user.CdUsuario,
-                    NmUsuario = user.NmUsuario,
-                    Email = user.NmEmail
-                }, "Login realizado com sucesso");
+                    CdUsuario = usuario.CdUsuario,
+                    NmUsuario = usuario.NmUsuario,
+                    Email = usuario.NmEmail
+                }, "Autentica√ß√£o realizada com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<LoginResponseDto>(ex, nameof(Login));
+                return TratarExcecao<RespostaSessaoDto>(ex, nameof(Autenticar));
             }
         }
 
         /// <summary>
-        /// Registra um novo usu·rio no sistema
+        /// Registra um novo usu√°rio no sistema
         /// </summary>
         [HttpPost("cadastrar")]
-        public async Task<ActionResult<ApiResponse<CadastroResponseDto>>> Register([FromBody] CadastrarDto dto)
+        public async Task<ActionResult<ApiResponse<RespostaCadastroDto>>> Cadastrar([FromBody] DadosCadastroDto dto)
         {
             try
             {
                 if (!ModelState.IsValid)
                 {
-                    var errors = ModelState.Values
+                    var erros = ModelState.Values
                         .SelectMany(v => v.Errors)
                         .Select(e => e.ErrorMessage)
                         .ToArray();
-                    return ErrorResponse<CadastroResponseDto>(400, "Dados inv·lidos", errors);
+                    return RespostaErro<RespostaCadastroDto>(400, "Dados inv√°lidos", erros);
                 }
 
-                // Validar email ˙nico
+                // Validar email √∫nico
                 if (await _context.Usuarios.AnyAsync(u => u.NmEmail == dto.NmEmail))
                 {
-                    return ErrorResponse<CadastroResponseDto>(409, "Email j· est· em uso");
+                    return RespostaErro<RespostaCadastroDto>(409, "Email j√° est√° em uso");
                 }
 
-                // Validar tipo de usu·rio
+                // Validar tipo de usu√°rio
                 if (!await _context.TipoUsuarios.AnyAsync(t => t.CdTipoUsuario == dto.CdTipoUsuario))
                 {
-                    return ErrorResponse<CadastroResponseDto>(400, "Tipo de usu·rio inv·lido");
+                    return RespostaErro<RespostaCadastroDto>(400, "Tipo de usu√°rio inv√°lido");
                 }
 
                 // Validar e formatar telefone
                 var telefoneValidado = await ValidarTelefone(dto.CdTelefone);
                 if (telefoneValidado == null)
                 {
-                    return ErrorResponse<CadastroResponseDto>(400, "Telefone inv·lido");
+                    return RespostaErro<RespostaCadastroDto>(400, "Telefone inv√°lido");
                 }
 
-                // Verificar telefone ˙nico
+                // Verificar telefone √∫nico
                 if (await _context.Usuarios.AnyAsync(u => u.CdTelefone == telefoneValidado))
                 {
-                    return ErrorResponse<CadastroResponseDto>(409, "Telefone j· est· em uso");
+                    return RespostaErro<RespostaCadastroDto>(409, "Telefone j√° est√° em uso");
                 }
 
                 // Validar senha
                 var senhaErros = ValidarSenha(dto.NmSenha);
                 if (senhaErros.Any())
                 {
-                    return ErrorResponse<CadastroResponseDto>(400, "Senha n„o atende aos requisitos", senhaErros.ToArray());
+                    return RespostaErro<RespostaCadastroDto>(400, "Senha n√£o atende aos requisitos", senhaErros.ToArray());
                 }
 
-                // Criar usu·rio
+                // Criar usu√°rio
                 var usuario = new Usuario
                 {
                     NmUsuario = dto.NmUsuario.Trim(),
@@ -135,9 +135,9 @@ namespace RabbitaskWebAPI.Controllers
                 _context.Usuarios.Add(usuario);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Novo usu·rio cadastrado: {UserId} - {Email}", usuario.CdUsuario, usuario.NmEmail);
+                _logger.LogInformation("Novo usu√°rio cadastrado: {UserId} - {Email}", usuario.CdUsuario, usuario.NmEmail);
 
-                return SuccessResponse(new CadastroResponseDto
+                return RespostaSucesso(new RespostaCadastroDto
                 {
                     CdUsuario = usuario.CdUsuario,
                     NmUsuario = usuario.NmUsuario,
@@ -146,55 +146,55 @@ namespace RabbitaskWebAPI.Controllers
             }
             catch (Exception ex)
             {
-                return HandleException<CadastroResponseDto>(ex, nameof(Register));
+                return TratarExcecao<RespostaCadastroDto>(ex, nameof(Cadastrar));
             }
         }
 
-        #region MÈtodos Auxiliares
+        #region M√©todos Auxiliares
 
         /// <summary>
-        /// Gera um token JWT para o usu·rio autenticado
+        /// Gera um token JWT para o usu√°rio autenticado
         /// </summary>
-        private string GerarTokenJwt(Usuario user)
+        private string GerarTokenJwt(Usuario usuario)
         {
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.CdUsuario.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.NmEmail),
-                new Claim(ClaimTypes.NameIdentifier, user.CdUsuario.ToString()),
-                new Claim(ClaimTypes.Email, user.NmEmail),
-                new Claim(ClaimTypes.Name, user.NmUsuario)
+                new Claim(JwtRegisteredClaimNames.Sub, usuario.CdUsuario.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, usuario.NmEmail),
+                new Claim(ClaimTypes.NameIdentifier, usuario.CdUsuario.ToString()),
+                new Claim(ClaimTypes.Email, usuario.NmEmail),
+                new Claim(ClaimTypes.Name, usuario.NmUsuario)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT_KEY"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var chave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT_KEY"]));
+            var credenciais = new SigningCredentials(chave, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["JWT_ISSUER"],
                 audience: _configuration["JWT_AUDIENCE"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(2), 
-                signingCredentials: creds);
+                signingCredentials: credenciais);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         /// <summary>
-        /// Valida e formata um n˙mero de telefone brasileiro
+        /// Valida e formata um n√∫mero de telefone brasileiro
         /// </summary>
         private async Task<string?> ValidarTelefone(string telefone)
         {
             try
             {
                 PhoneNumberUtil numberUtil = PhoneNumberUtil.GetInstance();
-                PhoneNumber phoneNumber = numberUtil.Parse(telefone, "BR");
+                PhoneNumber numeroTelefone = numberUtil.Parse(telefone, "BR");
 
-                if (!numberUtil.IsValidNumber(phoneNumber))
+                if (!numberUtil.IsValidNumber(numeroTelefone))
                 {
                     return null;
                 }
 
-                return numberUtil.Format(phoneNumber, PhoneNumberFormat.E164);
+                return numberUtil.Format(numeroTelefone, PhoneNumberFormat.E164);
             }
             catch (NumberParseException ex)
             {
@@ -212,24 +212,24 @@ namespace RabbitaskWebAPI.Controllers
 
             if (string.IsNullOrWhiteSpace(senha))
             {
-                erros.Add("Senha È obrigatÛria");
+                erros.Add("Senha √© obrigat√≥ria");
                 return erros;
             }
 
             if (senha.Length < 8)
-                erros.Add("Senha deve ter no mÌnimo 8 caracteres");
+                erros.Add("Senha deve ter no m√≠nimo 8 caracteres");
 
             if (senha.Length > 100)
-                erros.Add("Senha deve ter no m·ximo 100 caracteres");
+                erros.Add("Senha deve ter no m√°ximo 100 caracteres");
 
             if (!senha.Any(char.IsUpper))
-                erros.Add("Senha deve conter pelo menos uma letra mai˙scula");
+                erros.Add("Senha deve conter pelo menos uma letra mai√∫scula");
 
             if (!senha.Any(char.IsLower))
-                erros.Add("Senha deve conter pelo menos uma letra min˙scula");
+                erros.Add("Senha deve conter pelo menos uma letra min√∫scula");
 
             if (!senha.Any(char.IsDigit))
-                erros.Add("Senha deve conter pelo menos um n˙mero");
+                erros.Add("Senha deve conter pelo menos um n√∫mero");
 
             if (!senha.Any(c => !char.IsLetterOrDigit(c)))
                 erros.Add("Senha deve conter pelo menos um caractere especial");
@@ -242,17 +242,17 @@ namespace RabbitaskWebAPI.Controllers
 
     #region DTOs
 
-    public class LoginDto
+    public class CredenciaisDto
     {
-        [Required(ErrorMessage = "Email È obrigatÛrio")]
-        [EmailAddress(ErrorMessage = "Email inv·lido")]
+        [Required(ErrorMessage = "Email √© obrigat√≥rio")]
+        [EmailAddress(ErrorMessage = "Email inv√°lido")]
         public string Email { get; set; }
 
-        [Required(ErrorMessage = "Senha È obrigatÛria")]
+        [Required(ErrorMessage = "Senha √© obrigat√≥ria")]
         public string Senha { get; set; }
     }
 
-    public class LoginResponseDto
+    public class RespostaSessaoDto
     {
         public string Token { get; set; }
         public int CdUsuario { get; set; }
@@ -260,29 +260,29 @@ namespace RabbitaskWebAPI.Controllers
         public string Email { get; set; }
     }
 
-    public class CadastrarDto
+    public class DadosCadastroDto
     {
-        [Required(ErrorMessage = "Nome È obrigatÛrio")]
+        [Required(ErrorMessage = "Nome √© obrigat√≥rio")]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Nome deve ter entre 3 e 100 caracteres")]
         public string NmUsuario { get; set; }
 
-        [Required(ErrorMessage = "Email È obrigatÛrio")]
-        [EmailAddress(ErrorMessage = "Email inv·lido")]
+        [Required(ErrorMessage = "Email √© obrigat√≥rio")]
+        [EmailAddress(ErrorMessage = "Email inv√°lido")]
         public string NmEmail { get; set; }
 
-        [Required(ErrorMessage = "Senha È obrigatÛria")]
+        [Required(ErrorMessage = "Senha √© obrigat√≥ria")]
         public string NmSenha { get; set; }
 
-        [Required(ErrorMessage = "Telefone È obrigatÛrio")]
-        [Phone(ErrorMessage = "Telefone inv·lido")]
+        [Required(ErrorMessage = "Telefone √© obrigat√≥rio")]
+        [Phone(ErrorMessage = "Telefone inv√°lido")]
         public string CdTelefone { get; set; }
 
-        [Required(ErrorMessage = "Tipo de usu·rio È obrigatÛrio")]
-        [Range(1, int.MaxValue, ErrorMessage = "Tipo de usu·rio inv·lido")]
+        [Required(ErrorMessage = "Tipo de usu√°rio √© obrigat√≥rio")]
+        [Range(1, int.MaxValue, ErrorMessage = "Tipo de usu√°rio inv√°lido")]
         public int CdTipoUsuario { get; set; }
     }
 
-    public class CadastroResponseDto
+    public class RespostaCadastroDto
     {
         public int CdUsuario { get; set; }
         public string NmUsuario { get; set; }

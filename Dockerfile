@@ -1,18 +1,24 @@
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY RabbitaskWebAPI/*.csproj RabbitaskWebAPI/
-RUN dotnet restore RabbitaskWebAPI/RabbitaskWebAPI.csproj
+COPY ["RabbitaskWebAPI/RabbitaskWebAPI.csproj", "RabbitaskWebAPI/"]
+RUN dotnet restore "RabbitaskWebAPI/RabbitaskWebAPI.csproj"
 
-COPY RabbitaskWebAPI/. RabbitaskWebAPI/
-RUN dotnet publish RabbitaskWebAPI -c Release -o /app
+COPY ["RabbitaskWebAPI/", "RabbitaskWebAPI/"]
+WORKDIR "/src/RabbitaskWebAPI"
+RUN dotnet publish -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:80
+ENV ASPNETCORE_URLS=http://+:5000
+ENV ASPNETCORE_ENVIRONMENT=Production
 
-COPY --from=build /app .
+EXPOSE 5000
 
-# INICIAR A API
+COPY --from=build /app/publish .
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
 ENTRYPOINT ["dotnet", "RabbitaskWebAPI.dll"]

@@ -33,11 +33,11 @@ namespace RabbitaskWebAPI.Controllers
         /// Pega o dados do usuário atual
         /// </summary>
         [HttpGet("eu")]
-        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetCurrentUser()
+        public async Task<ActionResult<ApiResponse<UsuarioDto>>> ObterUsuarioAtual()
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
                 var usuario = await _context.Usuarios
                     .Include(u => u.CdTipoUsuarioNavigation)
@@ -54,14 +54,14 @@ namespace RabbitaskWebAPI.Controllers
 
                 if (usuario == null)
                 {
-                    return ErrorResponse<UsuarioDto>(404, "Usuário não encontrado");
+                    return RespostaErro<UsuarioDto>(404, "Usuário não encontrado");
                 }
 
-                return SuccessResponse(usuario, "Perfil carregado com sucesso");
+                return RespostaSucesso(usuario, "Perfil carregado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<UsuarioDto>(ex, nameof(GetCurrentUser));
+                return TratarExcecao<UsuarioDto>(ex, nameof(ObterUsuarioAtual));
             }
         }
 
@@ -70,12 +70,12 @@ namespace RabbitaskWebAPI.Controllers
         /// Retorna apenas a si msm + usuarios conectados se for Agente
         /// </summary>
         [HttpGet("gerenciaveis")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetUsuariosGerenciaveis()
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> ObterUsuariosGerenciaveis()
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
-                var cdUsuariosGeridos = await _authService.GetManagedUserIdsAsync(cdUsuarioAtual);
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
+                var cdUsuariosGeridos = await _authService.ObterCdsUsuariosGerenciadosAsync(cdUsuarioAtual);
 
                 var usuarios = await _context.Usuarios
                     .Where(u => cdUsuariosGeridos.Contains(u.CdUsuario))
@@ -88,13 +88,13 @@ namespace RabbitaskWebAPI.Controllers
                     .OrderBy(u => u.Nome)
                     .ToListAsync();
 
-                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                return RespostaSucesso<IEnumerable<UsuarioResumoDto>>(
                     usuarios,
                     $"Encontrados {usuarios.Count} usuários gerenciáveis");
             }
             catch (Exception ex)
             {
-                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetUsuariosGerenciaveis));
+                return TratarExcecao<IEnumerable<UsuarioResumoDto>>(ex, nameof(ObterUsuariosGerenciaveis));
             }
         }
 
@@ -102,16 +102,16 @@ namespace RabbitaskWebAPI.Controllers
         /// Pega o usuário por cd (se tiver permissão)
         /// </summary>
         [HttpGet("{codigo:int}")]
-        public async Task<ActionResult<ApiResponse<UsuarioDto>>> GetUsuario(int codigo)
+        public async Task<ActionResult<ApiResponse<UsuarioDto>>> ObterUsuario(int codigo)
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
                 // CHECAGEM MAROTA DE PERMISSÃO
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
+                if (!await _authService.PodeGerenciarUsuarioAsync(cdUsuarioAtual, codigo))
                 {
-                    return ErrorResponse<UsuarioDto>(403,
+                    return RespostaErro<UsuarioDto>(403,
                         "Você não tem permissão para acessar este usuário");
                 }
 
@@ -130,14 +130,14 @@ namespace RabbitaskWebAPI.Controllers
 
                 if (usuario == null)
                 {
-                    return ErrorResponse<UsuarioDto>(404, "Usuário não encontrado");
+                    return RespostaErro<UsuarioDto>(404, "Usuário não encontrado");
                 }
 
-                return SuccessResponse(usuario, "Usuário encontrado com sucesso");
+                return RespostaSucesso(usuario, "Usuário encontrado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<UsuarioDto>(ex, nameof(GetUsuario));
+                return TratarExcecao<UsuarioDto>(ex, nameof(ObterUsuario));
             }
         }
 
@@ -145,7 +145,7 @@ namespace RabbitaskWebAPI.Controllers
         /// Atualiza as info do usuário
         /// </summary>
         [HttpPut("eu")]
-        public async Task<ActionResult<ApiResponse<object>>> UpdateCurrentUser(
+        public async Task<ActionResult<ApiResponse<object>>> AtualizarUsuarioAtual(
             [FromBody] UsuarioUpdateDto dto)
         {
             try
@@ -157,15 +157,15 @@ namespace RabbitaskWebAPI.Controllers
                         .Select(e => e.ErrorMessage)
                         .ToArray();
 
-                    return ErrorResponse<object>(400, "Dados inválidos fornecidos", errors);
+                    return RespostaErro<object>(400, "Dados inválidos fornecidos", errors);
                 }
 
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
                 var usuario = await _context.Usuarios.FindAsync(cdUsuarioAtual);
                 if (usuario == null)
                 {
-                    return ErrorResponse<object>(404, "Usuário não encontrado");
+                    return RespostaErro<object>(404, "Usuário não encontrado");
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.Nome))
@@ -178,7 +178,7 @@ namespace RabbitaskWebAPI.Controllers
 
                     if (emailExists)
                     {
-                        return ErrorResponse<object>(409, "Email já está em uso");
+                        return RespostaErro<object>(409, "Email já está em uso");
                     }
 
                     usuario.NmEmail = dto.Email.Trim();
@@ -197,11 +197,11 @@ namespace RabbitaskWebAPI.Controllers
 
                 _logger.LogInformation("Usuário {CdUsuario} atualizou seu perfil", cdUsuarioAtual);
 
-                return SuccessResponse("Perfil atualizado com sucesso");
+                return RespostaSucesso("Perfil atualizado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(UpdateCurrentUser));
+                return TratarExcecao<object>(ex, nameof(AtualizarUsuarioAtual));
             }
         }
 
@@ -209,24 +209,24 @@ namespace RabbitaskWebAPI.Controllers
         /// Atualiza os dados do usuario - esse é pro agente
         /// </summary>
         [HttpPut("{codigo:int}")]
-        public async Task<ActionResult<ApiResponse<object>>> UpdateUsuario(
+        public async Task<ActionResult<ApiResponse<object>>> AtualizarUsuario(
             int codigo,
             [FromBody] UsuarioUpdateDto dto)
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
+                if (!await _authService.PodeGerenciarUsuarioAsync(cdUsuarioAtual, codigo))
                 {
-                    return ErrorResponse<object>(403,
+                    return RespostaErro<object>(403,
                         "Você não tem permissão para atualizar este usuário");
                 }
 
                 var usuario = await _context.Usuarios.FindAsync(codigo);
                 if (usuario == null)
                 {
-                    return ErrorResponse<object>(404, "Usuário não encontrado");
+                    return RespostaErro<object>(404, "Usuário não encontrado");
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.Nome))
@@ -239,7 +239,7 @@ namespace RabbitaskWebAPI.Controllers
 
                     if (emailExists)
                     {
-                        return ErrorResponse<object>(409, "Email já está em uso");
+                        return RespostaErro<object>(409, "Email já está em uso");
                     }
 
                     usuario.NmEmail = dto.Email.Trim();
@@ -254,11 +254,11 @@ namespace RabbitaskWebAPI.Controllers
                     "Usuário {ManagerId} atualizou o perfil do usuário {UserId}",
                     cdUsuarioAtual, codigo);
 
-                return SuccessResponse("Usuário atualizado com sucesso");
+                return RespostaSucesso("Usuário atualizado com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(UpdateUsuario));
+                return TratarExcecao<object>(ex, nameof(AtualizarUsuario));
             }
         }
 
@@ -266,15 +266,15 @@ namespace RabbitaskWebAPI.Controllers
         /// Pega as estatísticas do usuário (task counts, taxa de cumprimento, etc.)
         /// </summary>
         [HttpGet("{codigo:int}/estatisticas")]
-        public async Task<ActionResult<ApiResponse<UsuarioEstatisticasDto>>> GetEstatisticas(int codigo)
+        public async Task<ActionResult<ApiResponse<UsuarioEstatisticasDto>>> ObterEstatisticas(int codigo)
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
-                if (!await _authService.CanManageUserAsync(cdUsuarioAtual, codigo))
+                if (!await _authService.PodeGerenciarUsuarioAsync(cdUsuarioAtual, codigo))
                 {
-                    return ErrorResponse<UsuarioEstatisticasDto>(403,
+                    return RespostaErro<UsuarioEstatisticasDto>(403,
                         "Você não tem permissão para acessar as estatísticas deste usuário");
                 }
 
@@ -301,11 +301,11 @@ namespace RabbitaskWebAPI.Controllers
                         : 0
                 };
 
-                return SuccessResponse(estatisticas, "Estatísticas carregadas com sucesso");
+                return RespostaSucesso(estatisticas, "Estatísticas carregadas com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<UsuarioEstatisticasDto>(ex, nameof(GetEstatisticas));
+                return TratarExcecao<UsuarioEstatisticasDto>(ex, nameof(ObterEstatisticas));
             }
         }
 
@@ -313,17 +313,17 @@ namespace RabbitaskWebAPI.Controllers
         /// Pega todos os usuarios conectados ao agente autenticado
         /// </summary>
         [HttpGet("meus-usuarios")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetMeusUsuarios()
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> ObterMeusUsuarios()
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
                 // checa se é Agente
-                var isAgente = await _authService.IsAgenteAsync(cdUsuarioAtual);
+                var isAgente = await _authService.EhAgenteAsync(cdUsuarioAtual);
                 if (!isAgente)
                 {
-                    return ErrorResponse<IEnumerable<UsuarioResumoDto>>(403,
+                    return RespostaErro<IEnumerable<UsuarioResumoDto>>(403,
                         "Apenas Agentes podem acessar esta funcionalidade");
                 }
 
@@ -339,13 +339,13 @@ namespace RabbitaskWebAPI.Controllers
                     .OrderBy(u => u.Nome)
                     .ToListAsync();
 
-                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                return RespostaSucesso<IEnumerable<UsuarioResumoDto>>(
                     usuarios,
                     $"Encontrados {usuarios.Count} usuários gerenciados");
             }
             catch (Exception ex)
             {
-                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusUsuarios));
+                return TratarExcecao<IEnumerable<UsuarioResumoDto>>(ex, nameof(ObterMeusUsuarios));
             }
         }
 
@@ -354,16 +354,16 @@ namespace RabbitaskWebAPI.Controllers
         /// Apenas usuários padrão (não-agentes) podem acessar esta funcionalidade.
         /// </summary>
         [HttpGet("meus-agentes")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> GetMeusAgentes()
+        public async Task<ActionResult<ApiResponse<IEnumerable<UsuarioResumoDto>>>> ObterMeusAgentes()
         {
             try
             {
-                var cdUsuarioAtual = _authService.GetCurrentUserId();
+                var cdUsuarioAtual = _authService.ObterCdUsuarioAtual();
 
-                var isAgente = await _authService.IsAgenteAsync(cdUsuarioAtual);
+                var isAgente = await _authService.EhAgenteAsync(cdUsuarioAtual);
                 if (isAgente)
                 {
-                    return ErrorResponse<IEnumerable<UsuarioResumoDto>>(403,
+                    return RespostaErro<IEnumerable<UsuarioResumoDto>>(403,
                         "Apenas usuários padrão podem acessar esta funcionalidade");
                 }
 
@@ -379,13 +379,13 @@ namespace RabbitaskWebAPI.Controllers
                     .OrderBy(u => u.Nome)
                     .ToListAsync();
 
-                return SuccessResponse<IEnumerable<UsuarioResumoDto>>(
+                return RespostaSucesso<IEnumerable<UsuarioResumoDto>>(
                     agentes,
                     $"Encontrados {agentes.Count} agentes conectados");
             }
             catch (Exception ex)
             {
-                return HandleException<IEnumerable<UsuarioResumoDto>>(ex, nameof(GetMeusAgentes));
+                return TratarExcecao<IEnumerable<UsuarioResumoDto>>(ex, nameof(ObterMeusAgentes));
             }
         }
 
@@ -395,12 +395,12 @@ namespace RabbitaskWebAPI.Controllers
         [HttpPost("gerar-codigo")]
         public async Task<IActionResult> GerarCodigo()
         {
-            int userId = _authService.GetCurrentUserId();
+            int cdUsuario = _authService.ObterCdUsuarioAtual();
 
-            if (await _authService.IsAgenteAsync(userId))
+            if (await _authService.EhAgenteAsync(cdUsuario))
                 return Forbid("Agentes não podem gerar códigos.");
 
-            var codigo = _conexaoService.CriarCodigoConexao(userId);
+            var codigo = _conexaoService.CriarCodigoConexao(cdUsuario);
 
             return Ok(new
             {
@@ -413,11 +413,11 @@ namespace RabbitaskWebAPI.Controllers
         /// Usuário agente usa um código válido para criar uma conexão com um usuário padrão.
         /// </summary>
         [HttpPost("conectar/{codigo}")]
-        public async Task<IActionResult> ConectarPorCodigo(string codigo)
+        public async Task<IActionResult> ConectarComCodigo(string codigo)
         {
-            int agenteId = _authService.GetCurrentUserId();
+            int cdAgente = _authService.ObterCdUsuarioAtual();
 
-            if (!await _authService.IsAgenteAsync(agenteId))
+            if (!await _authService.EhAgenteAsync(cdAgente))
                 return Forbid("Somente agentes podem usar códigos de conexão.");
 
             var usuario = _conexaoService.ValidarCodigo(codigo);
@@ -425,21 +425,21 @@ namespace RabbitaskWebAPI.Controllers
                 return BadRequest("Código inválido ou expirado.");
 
             bool jaExiste = await _context.ConexaoUsuarios.AnyAsync(c =>
-                c.CdUsuarioAgente == agenteId && c.CdUsuario == usuario.CdUsuario);
+                c.CdUsuarioAgente == cdAgente && c.CdUsuario == usuario.CdUsuario);
 
             if (jaExiste)
                 return Conflict("Este usuário já está conectado a você.");
 
             var conexao = new ConexaoUsuario
             {
-                CdUsuarioAgente = agenteId,
+                CdUsuarioAgente = cdAgente,
                 CdUsuario = usuario.CdUsuario
             };
 
             _context.ConexaoUsuarios.Add(conexao);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Agente {AgenteId} conectou com usuário {UsuarioId}", agenteId, usuario.CdUsuario);
+            _logger.LogInformation("Agente {CdAgente} conectou com usuário {CdUsuario}", cdAgente, usuario.CdUsuario);
 
             return Ok(new
             {
@@ -465,7 +465,7 @@ namespace RabbitaskWebAPI.Controllers
 
                 if (conexao == null)
                 {
-                    return ErrorResponse<object>(404, "Conexão não encontrada");
+                    return RespostaErro<object>(404, "Conexão não encontrada");
                 }
 
                 _context.ConexaoUsuarios.Remove(conexao);
@@ -475,11 +475,11 @@ namespace RabbitaskWebAPI.Controllers
                     "Agente {CdUsuarioAgente} desconectado do usuário {CdUsuario}",
                     cdAgente, cdUsuario);
 
-                return SuccessResponse("Usuários desconectados com sucesso");
+                return RespostaSucesso("Usuários desconectados com sucesso");
             }
             catch (Exception ex)
             {
-                return HandleException<object>(ex, nameof(DesconectarUsuarios));
+                return TratarExcecao<object>(ex, nameof(DesconectarUsuarios));
             }
         }
     }

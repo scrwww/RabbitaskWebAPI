@@ -24,7 +24,7 @@ namespace RabbitaskWebAPI.Controllers
         /// Retorna todas as tags ou filtra por nome
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<IEnumerable<TagDto>>>> GetTags([FromQuery] string? nome = null)
+        public async Task<ActionResult<ApiResponse<IEnumerable<TagDto>>>> ObterTags([FromQuery] string? nome = null)
         {
             try
             {
@@ -43,14 +43,14 @@ namespace RabbitaskWebAPI.Controllers
 
                 if(tags.Count == 0)
                 {
-                    return ErrorResponse<IEnumerable<TagDto>>(404, "Nenhuma tag encontrada");
+                    return RespostaErro<IEnumerable<TagDto>>(404, "Nenhuma tag encontrada");
                 }
 
-                return SuccessResponse<IEnumerable<TagDto>>(tags, "Encontradas as tags");
+                return RespostaSucesso<IEnumerable<TagDto>>(tags, "Encontradas as tags");
             }
             catch (Exception ex)
             {
-                return HandleException<IEnumerable<TagDto>>(ex, nameof(GetTags));
+                return TratarExcecao<IEnumerable<TagDto>>(ex, nameof(ObterTags));
             }
         }
 
@@ -58,7 +58,7 @@ namespace RabbitaskWebAPI.Controllers
         /// Retorna uma tag por código
         /// </summary>
         [HttpGet("{codigo:int}")]
-        public async Task<ActionResult<ApiResponse<TagDto>>> GetTag(int codigo)
+        public async Task<ActionResult<ApiResponse<TagDto>>> ObterTag(int codigo)
         {
             try
             {
@@ -72,13 +72,13 @@ namespace RabbitaskWebAPI.Controllers
                     .FirstOrDefaultAsync();
 
                 if (tag == null)
-                    return ErrorResponse<TagDto>(404, "Tag não encontrada");
+                    return RespostaErro<TagDto>(404, "Tag não encontrada");
 
-                return SuccessResponse(tag);
+                return RespostaSucesso(tag);
             }
             catch (Exception ex)
             {
-                return HandleException<TagDto>(ex, nameof(GetTag));
+                return TratarExcecao<TagDto>(ex, nameof(ObterTag));
             }
         }
 
@@ -94,7 +94,7 @@ namespace RabbitaskWebAPI.Controllers
                     .FirstOrDefaultAsync(t => t.NmTag.ToLower() == dto.Nome.ToLower());
 
                 if (existente != null)
-                    return SuccessResponse(new TagDto { Cd = existente.CdTag, Nome = existente.NmTag },
+                    return RespostaSucesso(new TagDto { Cd = existente.CdTag, Nome = existente.NmTag },
                         "Tag já existente");
 
                 var proximoCodigo = await _context.Tags.MaxAsync(t => (int?)t.CdTag) ?? 0;
@@ -108,7 +108,7 @@ namespace RabbitaskWebAPI.Controllers
                 _context.Tags.Add(novaTag);
                 await _context.SaveChangesAsync();
 
-                return SuccessResponse(new TagDto
+                return RespostaSucesso(new TagDto
                 {
                     Cd = novaTag.CdTag,
                     Nome = novaTag.NmTag
@@ -116,7 +116,7 @@ namespace RabbitaskWebAPI.Controllers
             }
             catch (Exception ex)
             {
-                return HandleException<TagDto>(ex, nameof(CriarTag));
+                return TratarExcecao<TagDto>(ex, nameof(CriarTag));
             }
         }
     }

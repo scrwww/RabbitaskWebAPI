@@ -1,4 +1,4 @@
-﻿// Services/AuthorizationService.cs
+// Services/UserAuthorizationService.cs
 using Microsoft.EntityFrameworkCore;
 using RabbitaskWebAPI.Data;
 using System.Security.Claims;
@@ -6,8 +6,8 @@ using System.Security.Claims;
 namespace RabbitaskWebAPI.Services
 {
     /// <summary>
-    /// Implementation of authorization service
-    /// Single source of truth for all authorization logic
+    /// Implementação do serviço de autorização
+    /// Fonte única de verdade para toda lógica de autorização
     /// </summary>
     public class UserAuthorizationService : IUserAuthorizationService
     {
@@ -25,17 +25,17 @@ namespace RabbitaskWebAPI.Services
             _logger = logger;
         }
 
-        public int GetCurrentUserId()
+        public int ObterCdUsuarioAtual()
         {
             var user = _httpContextAccessor.HttpContext?.User;
 
             if (user == null || !user.Identity?.IsAuthenticated == true)
             {
-                _logger.LogWarning("Attempted to get user ID from unauthenticated context");
-                throw new UnauthorizedAccessException("User is not authenticated");
+                _logger.LogWarning("Tentativa de obter código do usuário em contexto não autenticado");
+                throw new UnauthorizedAccessException("Usuário não autenticado");
             }
 
-            // Try different claim types that might contain the user ID
+            // Tenta diferentes tipos de claim que podem conter o código do usuário
             var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
                              ?? user.FindFirst("sub")?.Value
                              ?? user.FindFirst("id")?.Value
@@ -44,108 +44,108 @@ namespace RabbitaskWebAPI.Services
 
             if (string.IsNullOrEmpty(userIdClaim))
             {
-                _logger.LogError("User ID claim not found in token. Available claims: {Claims}",
+                _logger.LogError("Claim de código do usuário não encontrado no token. Claims disponíveis: {Claims}",
                     string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}")));
-                throw new UnauthorizedAccessException("User ID not found in authentication token");
+                throw new UnauthorizedAccessException("Código do usuário não encontrado no token de autenticação");
             }
 
-            if (!int.TryParse(userIdClaim, out int userId))
+            if (!int.TryParse(userIdClaim, out int cdUsuario))
             {
-                _logger.LogError("Failed to parse user ID from claim value: {ClaimValue}", userIdClaim);
-                throw new UnauthorizedAccessException("Invalid user ID format in token");
+                _logger.LogError("Falha ao analisar código do usuário do valor do claim: {ClaimValue}", userIdClaim);
+                throw new UnauthorizedAccessException("Formato inválido do código do usuário no token");
             }
 
-            return userId;
+            return cdUsuario;
         }
 
-        public async Task<bool> IsAgenteAsync(int userId)
+        public async Task<bool> EhAgenteAsync(int cdUsuario)
         {
             try
             {
-                var isAgente = await _context.Usuarios
-                    .Where(u => u.CdUsuario == userId && u.CdTipoUsuario == 2)
+                var ehAgente = await _context.Usuarios
+                    .Where(u => u.CdUsuario == cdUsuario && u.CdTipoUsuario == 2)
                     .AnyAsync();
 
-                _logger.LogDebug("User {UserId} is Agente: {IsAgente}", userId, isAgente);
+                _logger.LogDebug("Usuário {CdUsuario} é Agente: {EhAgente}", cdUsuario, ehAgente);
 
-                return isAgente;
+                return ehAgente;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking if user {UserId} is Agente", userId);
+                _logger.LogError(ex, "Erro ao verificar se usuário {CdUsuario} é Agente", cdUsuario);
                 throw;
             }
         }
 
-        public async Task<List<int>> GetManagedUserIdsAsync(int userId)
+        public async Task<List<int>> ObterCdsUsuariosGerenciadosAsync(int cdUsuario)
         {
             try
             {
-                var managedIds = new List<int> { userId }; // Always include self
+                var cdsGerenciados = new List<int> { cdUsuario }; // Sempre inclui a si mesmo
 
-                // Check if user is an Agente
-                var isAgente = await IsAgenteAsync(userId);
+                // Verifica se o usuário é um Agente
+                var ehAgente = await EhAgenteAsync(cdUsuario);
 
-                if (isAgente)
+                if (ehAgente)
                 {
-                    // Get all Usuario Comum IDs connected to this Agente
-                    var connectedUserIds = await _context.ConexaoUsuarios
-                        .Where(c => c.CdUsuarioAgente == userId)
+                    // Obtém todos os códigos de Usuário Comum conectados a este Agente
+                    var cdsUsuariosConectados = await _context.ConexaoUsuarios
+                        .Where(c => c.CdUsuarioAgente == cdUsuario)
                         .Select(c => c.CdUsuario)
                         .ToListAsync();
 
-                    managedIds.AddRange(connectedUserIds);
+                    cdsGerenciados.AddRange(cdsUsuariosConectados);
 
                     _logger.LogDebug(
-                        "Agente {AgenteId} manages {Count} users: {UserIds}",
-                        userId,
-                        managedIds.Count,
-                        string.Join(", ", managedIds));
+                        "Agente {CdAgente} gerencia {Count} usuários: {Codigos}",
+                        cdUsuario,
+                        cdsGerenciados.Count,
+                        string.Join(", ", cdsGerenciados));
                 }
                 else
                 {
-                    _logger.LogDebug("Usuario Comum {UserId} manages only themselves", userId);
+                    _logger.LogDebug("Usuário Comum {CdUsuario} gerencia apenas a si mesmo", cdUsuario);
                 }
 
-                return managedIds;
+                return cdsGerenciados;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting managed user IDs for user {UserId}", userId);
+                _logger.LogError(ex, "Erro ao obter códigos dos usuários gerenciados para o usuário {CdUsuario}", cdUsuario);
                 throw;
             }
         }
 
-        public async Task<bool> CanManageUserAsync(int managerId, int targetUserId)
+        public async Task<bool> PodeGerenciarUsuarioAsync(int cdUsuarioGerenciador, int cdUsuarioAlvo)
         {
             try
             {
-                // Can always manage yourself
-                if (managerId == targetUserId)
+                // Sempre pode gerenciar a si mesmo
+                if (cdUsuarioGerenciador == cdUsuarioAlvo)
                 {
-                    _logger.LogDebug("User {UserId} can manage themselves", managerId);
+                    _logger.LogDebug("Usuário {CdUsuario} pode gerenciar a si mesmo", cdUsuarioGerenciador);
                     return true;
                 }
 
-                // Check if manager is an Agente connected to target user
-                var canManage = await _context.ConexaoUsuarios
-                    .AnyAsync(c => c.CdUsuarioAgente == managerId && c.CdUsuario == targetUserId);
+                // Verifica se o gerenciador é um Agente conectado ao usuário alvo
+                var podeGerenciar = await _context.ConexaoUsuarios
+                    .AnyAsync(c => c.CdUsuarioAgente == cdUsuarioGerenciador && c.CdUsuario == cdUsuarioAlvo);
 
                 _logger.LogDebug(
-                    "User {ManagerId} can manage user {TargetId}: {CanManage}",
-                    managerId,
-                    targetUserId,
-                    canManage);
+                    "Usuário {CdGerenciador} pode gerenciar usuário {CdAlvo}: {PodeGerenciar}",
+                    cdUsuarioGerenciador,
+                    cdUsuarioAlvo,
+                    podeGerenciar);
 
-                return canManage;
+                return podeGerenciar;
             }
             catch (Exception ex)
             {
                 _logger.LogError(
                     ex,
-                    "Error checking if user {ManagerId} can manage user {TargetId}",
-                    managerId,
-                    targetUserId);
+                    "Erro ao verificar se usuário {CdGerenciador} pode gerenciar usuário {CdAlvo}",
+                    cdUsuarioGerenciador,
+                    cdUsuarioAlvo);
                 throw;
             }
         }
