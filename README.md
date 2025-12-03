@@ -57,7 +57,7 @@ O arquivo `appsettings.Development.json` já está configurado para conexão loc
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=127.0.0.1;Port=3306;Database=rabbitask;User=rabbitask_user;Password=usersecret;"
+    "RabbitaskDb": "Server=127.0.0.1;Port=3306;Database=rabbitask;User=rabbitask_user;Password=usersecret;"
   }
 }
 ```
@@ -89,13 +89,11 @@ Para JWT e outras configurações, você pode adicionar os valores ao `appsettin
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=127.0.0.1;Port=3306;Database=rabbitask;User=rabbitask_user;Password=usersecret;"
+    "RabbitaskDb": "Server=127.0.0.1;Port=3306;Database=rabbitask;User=rabbitask_user;Password=usersecret;"
   },
-  "Jwt": {
-    "Key": "your-256-bit-hex-key-min-64-chars-change-in-production",
-    "Issuer": "Rabbitask",
-    "Audience": "RabbitaskUsers"
-  },
+  "JWT_KEY": "e3afcb428657dc529c0847e2e21b22fbae9208b8d7c73640440a49a5c4d558e0",
+  "JWT_ISSUER": "Rabbitask",
+  "JWT_AUDIENCE": "RabbitaskUsers",
   "FrontendOrigin": "http://localhost:8100;http://localhost:4200;http://localhost:8101"
 }
 ```
