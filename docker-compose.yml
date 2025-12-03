@@ -26,8 +26,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        BUILDKIT_INLINE_CACHE: 1
     container_name: rabbitask-api
     depends_on:
       rabbitask-mysql:
@@ -36,13 +34,20 @@ services:
       - .env
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:5000
       ConnectionStrings__RabbitaskDb: "Server=${RABBITASK_DB_HOST};Port=${RABBITASK_DB_PORT};Database=${RABBITASK_DB_NAME};Uid=${RABBITASK_DB_USER};Pwd=${RABBITASK_DB_PASSWORD};"
-      JwtConfig__Key: ${JWT_KEY}
-      JwtConfig__Issuer: ${JWT_ISSUER}
-      JwtConfig__Audience: ${JWT_AUDIENCE}
+      RABBITASK_DB_HOST: ${RABBITASK_DB_HOST}
+      RABBITASK_DB_PORT: ${RABBITASK_DB_PORT}
+      RABBITASK_DB_NAME: ${RABBITASK_DB_NAME}
+      RABBITASK_DB_USER: ${RABBITASK_DB_USER}
+      RABBITASK_DB_PASSWORD: ${RABBITASK_DB_PASSWORD}
+      JWT_KEY: ${JWT_KEY}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: ${JWT_AUDIENCE}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
     ports:
       - "5000:5000"
-    restart: unless-stopped
+    restart: on-failure:5
     networks:
       - rabbitask-network
 

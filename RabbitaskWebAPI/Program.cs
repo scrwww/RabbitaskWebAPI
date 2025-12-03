@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RabbitaskWebAPI.Data;
+using RabbitaskWebAPI.Middleware;
 using RabbitaskWebAPI.Services;
 using System.Reflection;
 using System.Text;
@@ -16,17 +17,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 var connectionString =
-    builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? $"Server={builder.Configuration["RABBITASK_DB_HOST"]};" +
-       $"Port={builder.Configuration["RABBITASK_DB_PORT"]};" +
-       $"Database={builder.Configuration["RABBITASK_DB_NAME"]};" +
-       $"User={builder.Configuration["RABBITASK_DB_USER"]};" +
-       $"Password={builder.Configuration["RABBITASK_DB_PASSWORD"]};";
+    builder.Configuration.GetConnectionString("RabbitaskDb")
+    ?? throw new InvalidOperationException("Connection string 'RabbitaskDb' not found in configuration");
 
 builder.Services.AddDbContext<RabbitaskContext>(options =>
 {
-    options.UseMySql(connectionString,
-        ServerVersion.AutoDetect(connectionString),
+    // Use explicit MySQL version instead of AutoDetect to avoid connection at startup
+    var serverVersion = new MySqlServerVersion(new Version(8, 0, 0));
+    options.UseMySql(connectionString, serverVersion,
         mysql =>
         {
             mysql.EnableRetryOnFailure(
@@ -123,29 +121,46 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-var frontendOrigin = builder.Configuration["FRONTEND_ORIGIN"]
-                     ?? "http://localhost:8100";
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", cors =>
     {
-        cors.WithOrigins(frontendOrigin)
+        cors.AllowAnyOrigin()
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyMethod();
     });
 });
 
 var app = builder.Build();
 
-if (args.Contains("--migrate"))
+// Auto-run migrations on startup
+try
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<RabbitaskContext>();
+    
+    Console.WriteLine("Applying database migrations...");
     db.Database.Migrate();
-    Console.WriteLine("Migrations aplicadas com sucesso.");
+    Console.WriteLine("Database migrations completed successfully.");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error applying migrations: {ex.Message}");
+    // Don't fail startup if migrations fail - allow health checks to report issues
+}
+
+if (args.Contains("--migrate"))
+{
     return;
+}
+
+// Add exception handler middleware
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+
+// Only use developer exception page in development
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
 }
 
 app.UseCors("FrontendPolicy");
